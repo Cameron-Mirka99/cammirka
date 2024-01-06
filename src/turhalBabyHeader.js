@@ -5,7 +5,7 @@ function TurBabyHeaderText() {
     const [timeTillBaby, setTimeTillBaby] = useState(date)
     return (
         <header className="MainHeader">
-            Countdown to Baby Turhall
+            Countdown to Baby Terhall
         </header>
     );
   }
