@@ -2,7 +2,7 @@ function TurBabyHeaderText() {
 
     return (
         <header className="MainHeader">
-            Countdown to Baby Turhall
+            Countdown to Baby Terhall
         </header>
     );
   }
