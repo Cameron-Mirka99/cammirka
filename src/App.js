@@ -1,6 +1,6 @@
 import './App.css';
-import TurBabyHeaderText from './turhalBabyHeader';
-import CountDownTimer from './countDownTimer';
+import TurBabyHeaderText from './browser/turhalBabyHeader';
+import CountDownTimer from './browser/countDownTimer';
 
 function App() {
   return (
