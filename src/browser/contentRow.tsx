@@ -1,7 +1,7 @@
 
 import { Stack } from "@mui/material"
 import React, { ReactElement } from "react"
-import { ContentItem } from "./contentItem.tsx"
+import { ContentItem } from "./contentItem"
 
 type contentRowProps = {
     content1: ReactElement
