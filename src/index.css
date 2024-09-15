@@ -5,6 +5,34 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #89CFF0;
+  background-color: #3F66C0;
+}
+.secondaryColor {
+  background-color: #C0993F;
 }
 
+.header{
+  flex: auto;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size:8vw;
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+}
+
+.leftSection {
+
+}
+
+.rightSection {
+
+}
+
+.contentRow {
+  margin-top: 10px;
+  margin-right: 10px;
+  margin-left:10px;
+}
+.contentItem {
+  border-radius:10px;
+}
