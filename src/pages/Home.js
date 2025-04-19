@@ -134,7 +134,7 @@ function Home({ photos, loading, ...props }) {
       {/* Modal for photo preview */}
       <Dialog open={modalOpen} onClose={handleModalClose} maxWidth="md" fullWidth>
         <DialogTitle sx={{ m: 0, p: 2 }}>
-          Photo Preview
+          {selectedPhoto ? selectedPhoto.key : ''}
           <IconButton
             aria-label="close"
             onClick={handleModalClose}
@@ -152,9 +152,6 @@ function Home({ photos, loading, ...props }) {
           {selectedPhoto && (
             <Box component="img" src={selectedPhoto.url} alt="Selected" sx={{ width: '100%', borderRadius: 2 }} />
           )}
-          <Typography variant="body1" sx={{ mt: 2 }}>
-            A beautiful capture from our collection. Enjoy the details and natural beauty of this moment.
-          </Typography>
         </DialogContent>
       </Dialog>
     </React.Fragment>

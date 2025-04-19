@@ -12,13 +12,10 @@ function App() {
       try {
         const res = await fetch('https://atp0hr8g95.execute-api.us-east-1.amazonaws.com/GetPhotoList');
         const data = await res.json();
-        console.log('Fetched photos:', data.photos);
         setPhotos(data.photos);
-        console.log('Here1')
       } catch (err) {
         console.error('Failed to fetch photos:', err);
       } finally{
-        console.log("finally here")
         setLoading('false');
       }
     };
