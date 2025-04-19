@@ -113,7 +113,7 @@ function Home({ photos, loading, ...props }) {
       <Toolbar />
 
       <Container maxWidth="xl" sx={{ marginTop: 4 }}>
-        {loading ? (
+        {false ? (
           <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
             <CircularProgress />
           </Box>
@@ -122,7 +122,7 @@ function Home({ photos, loading, ...props }) {
             {photos.map((photo, index) => (
               <PhotoItem
                 key={index}
-                src={photo}
+                src={photo.url}
                 alt={`Photo ${index + 1}`}
                 onClick={() => handlePhotoClick(photo)}
               />
@@ -150,7 +150,7 @@ function Home({ photos, loading, ...props }) {
         </DialogTitle>
         <DialogContent dividers>
           {selectedPhoto && (
-            <Box component="img" src={selectedPhoto} alt="Selected" sx={{ width: '100%', borderRadius: 2 }} />
+            <Box component="img" src={selectedPhoto.url} alt="Selected" sx={{ width: '100%', borderRadius: 2 }} />
           )}
           <Typography variant="body1" sx={{ mt: 2 }}>
             A beautiful capture from our collection. Enjoy the details and natural beauty of this moment.
