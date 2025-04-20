@@ -153,6 +153,7 @@ function Home({ photos, loading, ...props }) {
             <Box component="img" src={selectedPhoto.url} alt="Selected" sx={{ width: '100%', borderRadius: 2 }} />
           )}
         </DialogContent>
+        <Typography variant='body4'><small>All images have been resized to enhance online loading and may not reflect proper quality of image</small></Typography>
       </Dialog>
     </React.Fragment>
   );
