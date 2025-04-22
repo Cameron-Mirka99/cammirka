@@ -12,13 +12,22 @@ function App() {
       try {
         const res = await fetch('https://atp0hr8g95.execute-api.us-east-1.amazonaws.com/GetPhotoList');
         const data = await res.json();
-        setPhotos(data.photos);
+        setPhotos(shufflePhotos(data.photos));
       } catch (err) {
         console.error('Failed to fetch photos:', err);
       } finally{
         setLoading('false');
       }
     };
+
+    const shufflePhotos = (photos) => {
+      const shuffled = [...photos]
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
 
     fetchPhotos();
   }, []);
