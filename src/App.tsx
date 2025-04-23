@@ -34,7 +34,7 @@ function App() {
     }else{
       console.log('Not refreshing the photo list');
     }
-  }, []);
+  }, [photos.length]);
 
   return (
     <Routes>
