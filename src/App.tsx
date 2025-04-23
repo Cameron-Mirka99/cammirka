@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
+import Home, { Photo } from './pages/Home';
 import About from './pages/About';
 
 function App() {
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState([] as Array<Photo>);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,11 +16,11 @@ function App() {
       } catch (err) {
         console.error('Failed to fetch photos:', err);
       } finally{
-        setLoading('false');
+        setLoading(false);
       }
     };
 
-    const shufflePhotos = (photos) => {
+    const shufflePhotos = (photos : Array<Photo>) => {
       const shuffled = [...photos]
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -28,8 +28,12 @@ function App() {
       }
       return shuffled;
     }
-
-    fetchPhotos();
+    //should prevent constant fetching when dev working
+    if(photos.length === 0) {
+      fetchPhotos();
+    }else{
+      console.log('Not refreshing the photo list');
+    }
   }, []);
 
   return (
