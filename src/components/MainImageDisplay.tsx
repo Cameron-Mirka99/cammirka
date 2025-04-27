@@ -4,7 +4,7 @@ import { Photo } from "../pages/Home";
 import {useState} from 'react'
 
 type PhotoItemProps = {
-  src:string,
+  src:Photo,
   alt:string,
   onClick: () => void
 
@@ -26,7 +26,7 @@ function PhotoItem({ src , alt, onClick } : PhotoItemProps) {
       >
         <Box
           component="img"
-          src={src}
+          src={src.url}
           alt={alt}
           sx={{
             width: '100%',
@@ -35,6 +35,7 @@ function PhotoItem({ src , alt, onClick } : PhotoItemProps) {
             transform: hovered ? 'scale(1.05)' : 'scale(1)',
             transformOrigin: 'center center',
           }}
+          title={src.key}
         />
       </Box>
     );
@@ -58,7 +59,7 @@ export const MainImageDisplay = ({setSelectedPhoto,setModalOpen,photos,columnsCo
               return (
               <PhotoItem
                 key={index}
-                src={photo.url}
+                src={photo}
                 alt={`Photo ${index + 1}`}
                 onClick={() => handlePhotoClick(photo)}
               />
