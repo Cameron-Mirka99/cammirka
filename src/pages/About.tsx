@@ -42,7 +42,7 @@ You’ll often find me out on the Olentangy Trail or roaming the paths of Highba
           Canon EF 24–55mm f/5.6
           </ListItem>
           <ListItem>
-          Tamron EF 200–500mm
+          Canon RF 100-500mm F4.5-7.1 L IS USM
           </ListItem>
         </List>
         </Typography>
