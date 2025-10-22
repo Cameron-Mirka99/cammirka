@@ -3,6 +3,7 @@ import { Container, Box, CircularProgress } from "@mui/material";
 import { Photo } from "../pages/Home";
 import PhotoItem from "./PhotoItem";
 import { useState, useEffect } from 'react';
+import photoCache from '../utils/photoCache';
 
 type MainImageDisplayProps = {
   setSelectedPhoto: (photoUrl: Photo) => void;
@@ -30,19 +31,10 @@ export const MainImageDisplay = ({
     setLoading(true);
     setVisiblePhotos([]);
     
-    // First preload all images
+    // First preload all images via the cache
     const preloadImages = async () => {
       try {
-        await Promise.all(
-          photos.map(photo => {
-            return new Promise((resolve, reject) => {
-              const img = new Image();
-              img.onload = resolve;
-              img.onerror = resolve; // Still continue even if some images fail
-              img.src = photo.url;
-            });
-          })
-        );
+        await photoCache.preloadMany(photos.map(p => p.url));
       } catch (error) {
         console.error("Error preloading images:", error);
       }

@@ -1,6 +1,7 @@
 import { Box } from "@mui/material";
-import { useState, memo } from 'react';
+import { useState, memo, useMemo } from 'react';
 import { Photo } from "../pages/Home";
+import photoCache from '../utils/photoCache';
 
 export type PhotoItemProps = {
   src: Photo;
@@ -12,10 +13,11 @@ export type PhotoItemProps = {
 const PhotoItem = memo(({ src, alt, onClick, id }: PhotoItemProps) => {
   const [hovered, setHovered] = useState(false);
   const [hasError, setHasError] = useState(false);
-
   const handleImageError = () => {
     setHasError(true);
   };
+
+  const imageSrc = useMemo(() => photoCache.get(src.url) || src.url, [src.url]);
 
   return (
     <Box
@@ -57,15 +59,18 @@ const PhotoItem = memo(({ src, alt, onClick, id }: PhotoItemProps) => {
       ) : (
         <Box
           component="img"
-          src={src.url}
+          src={imageSrc}
           alt={alt}
           onError={handleImageError}
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
           sx={{
             width: '100%',
             display: 'block',
             transition: 'transform 0.3s ease-out',
             transform: hovered ? 'scale(1.05)' : 'scale(1)',
             transformOrigin: 'center center',
+            userSelect: 'none',
           }}
           title={src.key}
         />

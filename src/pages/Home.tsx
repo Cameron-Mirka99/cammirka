@@ -27,13 +27,13 @@ function Home({ photos, loading, ...props } : HomeProps) {
 
   let columnsCount;
   if (isLg) {
-    columnsCount = 6;
-  } else if (isMd) {
-    columnsCount = 4;
-  } else if (isSm) {
     columnsCount = 3;
-  } else {
+  } else if (isMd) {
     columnsCount = 2;
+  } else if (isSm) {
+    columnsCount = 2;
+  } else {
+    columnsCount = 1;
   }
 
   const [selectedPhoto, setSelectedPhoto] = useState<Photo>();
