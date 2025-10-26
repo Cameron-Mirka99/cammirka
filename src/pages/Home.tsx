@@ -16,8 +16,14 @@ export type Photo = {
 type HomeProps = {
   photos: Array<Photo>;
   loading: boolean;
+  // function to load the next page of photos
+  loadMore: () => Promise<void>;
+  fetchingMore: boolean;
+  hasMore: boolean;
+  onImagesAppended: () => void;
 }
-function Home({ photos, loading, ...props } : HomeProps) {
+
+function Home({ photos, loading, loadMore, fetchingMore, hasMore, ...props } : HomeProps) {
   const theme = useTheme();
   
   // Set dynamic column count based on screen width.
@@ -47,7 +53,16 @@ function Home({ photos, loading, ...props } : HomeProps) {
   return (
     <>
       <Header props={props}/>
-      <MainImageDisplay setSelectedPhoto={setSelectedPhoto} setModalOpen={setModalOpen} photos={photos} columnsCount={columnsCount}/>
+      <MainImageDisplay
+        setSelectedPhoto={setSelectedPhoto}
+        setModalOpen={setModalOpen}
+        photos={photos}
+        columnsCount={columnsCount}
+        loadMore={loadMore}
+        fetchingMore={fetchingMore}
+        hasMore={hasMore}
+        onImagesAppended={props.onImagesAppended}
+      />
       <LargeImageModal modalOpen={modalOpen} handleModalClose={handleModalClose} selectedPhoto={selectedPhoto}/>
     </>
   );
