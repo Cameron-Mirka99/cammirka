@@ -174,12 +174,25 @@ export const MainImageDisplay = ({
   }, [photos]);
 
   // Scroll listener: when user scrolls to bottom, request more photos
+  // Improved scroll trigger: only allow a new fetch when user leaves and re-enters threshold
+  const wasNearBottomRef = useRef(false);
   useEffect(() => {
     const onScroll = () => {
       if (!hasMore || fetchingMore) return;
-      const nearBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 50);
-      if (nearBottom) {
+      const estimatedRowHeight = 250;
+      const rowsToTrigger = 3;
+      const triggerDistance = estimatedRowHeight * rowsToTrigger;
+      const scrollBottom = window.innerHeight + window.scrollY;
+      const docHeight = document.documentElement.scrollHeight;
+      const nearBottom = (docHeight - scrollBottom) <= triggerDistance;
+
+      // Only trigger when entering the threshold (not while staying in it)
+      if (nearBottom && !wasNearBottomRef.current) {
+        wasNearBottomRef.current = true;
         loadMore();
+      } else if (!nearBottom && wasNearBottomRef.current) {
+        // Reset trigger when user scrolls away from threshold
+        wasNearBottomRef.current = false;
       }
     };
 
