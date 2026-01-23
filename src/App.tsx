@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Box } from '@mui/material';
 
 // Module-level flag to ensure the initial photos fetch runs only once per
 // full page load. This prevents duplicate fetches caused by React StrictMode
@@ -10,23 +11,14 @@ import About from './pages/About';
 
 let initialPhotosFetched = false;
 function App() {
-  // photos holds the accumulated list we have fetched so far
+  // photos holds the list of fetched photos
   const [photos, setPhotos] = useState([] as Array<Photo>);
   const [loading, setLoading] = useState(true);
-  const [fetchingMore, setFetchingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  // Prevent requesting the next page until the current page's images have
-  // been preloaded and appended into the gallery. This flag is toggled by
-  // MainImageDisplay via the onImagesAppended callback.
-  const [canFetchNext, setCanFetchNext] = useState(true);
 
-  // Fetch a page of photos from the server. The server is expected to
+  // Fetch photos from the server. The server is expected to
   // accept a POST body with { excludeKeys: string[], limit: number }
   // and return { photos: Photo[] } containing up to `limit` new photos.
-  const fetchPhotos = useCallback(async (excludeKeys: string[] = [], limit = 15) => {
-    // Block further fetches until MainImageDisplay notifies images appended
-    setCanFetchNext(false);
-    setFetchingMore(true);
+  const fetchPhotos = useCallback(async (excludeKeys: string[] = [], limit = 200) => {
     try {
       const res = await fetch('https://atp0hr8g95.execute-api.us-east-1.amazonaws.com/GetPhotoList', {
         method: 'POST',
@@ -42,9 +34,6 @@ function App() {
 
   const incoming: Array<Photo> = Array.isArray(data.photos) ? data.photos : [];
 
-      // If server returned fewer than requested, assume we are at the end
-      if (incoming.length < limit) setHasMore(false);
-
       // Append incoming photos to state
       setPhotos(prev => {
         // Avoid duplicates by key
@@ -55,45 +44,91 @@ function App() {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch photos:', err);
-      // Allow retrying or fetching again if the network request failed
-      setCanFetchNext(true);
     } finally {
-      setFetchingMore(false);
       setLoading(false);
     }
   }, []);
 
-  // Initial fetch: request first 15. Use a module-level guard so this only
+  // Initial fetch: request first 200. Use a module-level guard so this only
   // runs once per full page load (prevents duplicate requests when React
   // StrictMode mounts/unmounts components during development).
   useEffect(() => {
     if (initialPhotosFetched) return;
     initialPhotosFetched = true;
     // Only run once on page load
-    fetchPhotos([], 15);
+    fetchPhotos([], 200);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Called by UI to fetch the next page. It will pass names of already fetched images.
-  const loadMorePhotos = useCallback(async () => {
-    if (fetchingMore || !hasMore || !canFetchNext) return;
-    const alreadyFetchedNames = photos.map(p => p.key);
-    // pass the already fetched keys as `excludeKeys` in the POST body
-    await fetchPhotos(alreadyFetchedNames, 15);
-  }, [fetchPhotos, photos, fetchingMore, hasMore, canFetchNext]);
-
-  // Callback passed to MainImageDisplay to signal that newly-fetched images
-  // have been preloaded and appended into the gallery, and it's safe to
-  // fetch the next page.
-  const handleImagesAppended = useCallback(() => {
-    setCanFetchNext(true);
-  }, []);
-
   return (
-    <Routes>
-  <Route path="/" element={<Home photos={photos} loading={loading} loadMore={loadMorePhotos} fetchingMore={fetchingMore} hasMore={hasMore} onImagesAppended={handleImagesAppended} />} />
-      <Route path="/about" element={<About />} />
-    </Routes>
+    <Box
+      sx={{
+        background: 'linear-gradient(135deg, #0A0E27 0%, #111A3F 50%, #0A0E27 100%)',
+        minHeight: '100vh',
+        position: 'relative',
+      }}
+    >
+      {/* Animated background elements */}
+      <Box
+        sx={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '10%',
+            right: '10%',
+            width: '400px',
+            height: '400px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(0, 217, 255, 0.1) 0%, transparent 70%)',
+            filter: 'blur(40px)',
+            animation: 'float 20s ease-in-out infinite',
+          }}
+        />
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: '10%',
+            left: '10%',
+            width: '400px',
+            height: '400px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(255, 107, 157, 0.1) 0%, transparent 70%)',
+            filter: 'blur(40px)',
+            animation: 'float 15s ease-in-out infinite',
+            animationDelay: '5s',
+          }}
+        />
+        <style>
+          {`
+            @keyframes float {
+              0%, 100% {
+                transform: translateY(0px);
+              }
+              50% {
+                transform: translateY(30px);
+              }
+            }
+          `}
+        </style>
+      </Box>
+
+      {/* Content */}
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
+        <Routes>
+          <Route path="/" element={<Home photos={photos} loading={loading} />} />
+          <Route path="/about" element={<About />} />
+        </Routes>
+      </Box>
+    </Box>
   );
 }
 
