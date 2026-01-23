@@ -17,6 +17,7 @@ export type GalleryConfig = {
   thumbnailDisplayScale: number;
   lazyLoad: boolean;
   lazyLoadTreshold: number;
+  viewerImageDisplay: string;
   viewerTools: {
     topRight: string;
     topLeft: string;
@@ -43,6 +44,7 @@ export const createGalleryConfig = (
     thumbnailDisplayScale: 100,
     lazyLoad: true,
     lazyLoadTreshold: 100,
+    viewerImageDisplay: 'upscale',
     viewerTools: {
       topRight: 'close',
       topLeft: '',
