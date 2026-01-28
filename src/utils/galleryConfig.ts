@@ -10,6 +10,7 @@ export type GalleryItem = {
 export type GalleryConfig = {
   items: GalleryItem[];
   gallery: { layout: string };
+  locationHash: boolean;
   thumbnailHoverEffect2: string;
   thumbnailHeight: string;
   thumbnailWidth: number;
@@ -24,9 +25,6 @@ export type GalleryConfig = {
   };
 };
 
-/**
- * Create nanogallery2 configuration object
- */
 export const createGalleryConfig = (
   items: GalleryItem[],
   thumbnailWidth: number,
@@ -34,39 +32,51 @@ export const createGalleryConfig = (
 ): GalleryConfig => {
   return {
     items,
-    gallery: {
-      layout: 'masonry',
-    },
-    thumbnailHoverEffect2: 'image_scale_1.00_1.05_5000|image_rotateZ_0deg_2deg_5000',
+
+    gallery: { layout: "masonry" },
+
+    // ✅ REQUIRED for React / SPA routing
+    // Prevents hash/history updates that instantly close the lightbox
+    locationHash: false,
+
+    thumbnailHoverEffect2:
+      "image_scale_1.00_1.05_5000|image_rotateZ_0deg_2deg_5000",
+
     thumbnailHeight,
     thumbnailWidth,
-    thumbnailAlignment: 'center',
+    thumbnailAlignment: "center",
     thumbnailDisplayScale: 100,
+
     lazyLoad: true,
     lazyLoadTreshold: 100,
-    viewerImageDisplay: 'upscale',
+
+    viewerImageDisplay: "upscale",
     viewerTools: {
-      topRight: 'close',
-      topLeft: '',
+      topRight: "close",
+      topLeft: "",
     },
   };
 };
 
-/**
- * Initialize nanogallery2 with configuration on a DOM element
- */
 export const initializeNanogallery2 = (
   element: HTMLDivElement,
   config: GalleryConfig
 ): void => {
   try {
-    if (typeof (window as any).jQuery === 'undefined') {
-      throw new Error('jQuery is not available');
-    }
+    const w = window as any;
+    if (!w.jQuery) throw new Error("jQuery not available");
 
-    const jQueryElement = (window as any).jQuery(element);
-    jQueryElement.nanogallery2(config);
+    const $el = w.jQuery(element);
+
+    // Clean init (safe even if not previously initialized)
+    try {
+      $el.nanogallery2("destroy");
+    } catch {}
+
+    $el.removeData("nanogallery2");
+    $el.nanogallery2(config);
   } catch (error) {
-    console.error('Error initializing nanogallery2:', error);
+    console.error("[initializeNanogallery2]", error);
   }
 };
+

@@ -1,128 +1,179 @@
 import { Box, CircularProgress, Container } from "@mui/material";
 import { Photo } from "../pages/Home";
-import { useState, useEffect, useRef, useCallback } from 'react';
-import photoCache from '../utils/photoCache';
-import { initializeNanogallery2, createGalleryConfig, GalleryItem } from '../utils/galleryConfig';
-import { calculateThumbnailDimensions } from '../utils/gallerySizing';
-import { getNewPhotos, getFirstBatchPhotos, preloadPhotoBatch, shufflePhotos } from '../utils/photoLoader';
-import 'jquery';
+import { useState, useEffect, useRef, useCallback } from "react";
+import photoCache from "../utils/photoCache";
+import {
+  initializeNanogallery2,
+  createGalleryConfig,
+  GalleryItem,
+} from "../utils/galleryConfig";
+import { calculateThumbnailDimensions } from "../utils/gallerySizing";
+import {
+  getNewPhotos,
+  getFirstBatchPhotos,
+  preloadPhotoBatch,
+  shufflePhotos,
+} from "../utils/photoLoader";
+import "jquery";
 
 type MainImageDisplayProps = {
   photos: Array<Photo>;
   columnsCount: number;
 };
 
-export const MainImageDisplay = ({
-  photos,
-  columnsCount
-}: MainImageDisplayProps) => {
+export const MainImageDisplay = ({ photos, columnsCount }: MainImageDisplayProps) => {
   const [loading, setLoading] = useState(true);
   const [visiblePhotos, setVisiblePhotos] = useState<Photo[]>([]);
+  const [spinnerUntilStart, setSpinnerUntilStart] = useState(true);
+
   const prevKeysRef = useRef<Set<string>>(new Set());
   const galleryRef = useRef<HTMLDivElement>(null);
-  const [spinnerUntilStart, setSpinnerUntilStart] = useState(true);
-  
-  const initializeGallery = useCallback(() => {
+  const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const galleryInitializedRef = useRef(false);
+
+  const destroyGallery = useCallback(() => {
     if (!galleryRef.current) return;
 
-    const dimensions = calculateThumbnailDimensions(
-      galleryRef.current.offsetWidth,
-      columnsCount
-    );
+    try {
+      const w = window as any;
+      if (w.jQuery) {
+        const $el = w.jQuery(galleryRef.current);
+        try {
+          $el.nanogallery2("destroy");
+        } catch {}
+        $el.removeData("nanogallery2");
+      }
 
-    const galleryItems: GalleryItem[] = visiblePhotos.map((photo) => ({
-      src: photoCache.get(photo.url) || photo.url,
-      thumb: photoCache.get(photo.url) || photo.url,
-    }));
+      galleryRef.current.innerHTML = "";
+      galleryRef.current.className = "";
+      galleryRef.current.removeAttribute("data-nanogallery2");
+    } catch (err) {
+      console.error("[MainImageDisplay] destroyGallery", err);
+    }
 
-    const config = createGalleryConfig(
-      galleryItems,
-      dimensions.width,
-      dimensions.height
-    );
+    galleryInitializedRef.current = false;
+  }, []);
 
-    initializeNanogallery2(galleryRef.current, config);
-  }, [visiblePhotos, columnsCount]);
+  const initializeGallery = useCallback(() => {
+    if (!galleryRef.current || visiblePhotos.length === 0) return;
 
-  // When photos prop changes, preload only the newly-received images and
-  // append them to visiblePhotos so the UI increments as pages arrive.
+    if (initTimeoutRef.current) {
+      clearTimeout(initTimeoutRef.current);
+    }
+
+    initTimeoutRef.current = setTimeout(() => {
+      if (!galleryRef.current) return;
+
+      if (galleryInitializedRef.current) {
+        destroyGallery();
+      }
+
+      const dimensions = calculateThumbnailDimensions(
+        galleryRef.current.offsetWidth,
+        columnsCount
+      );
+
+      const items: GalleryItem[] = visiblePhotos.map((photo) => ({
+        src: photoCache.get(photo.url) || photo.url,
+        thumb: photoCache.get(photo.url) || photo.url,
+      }));
+
+      const config = createGalleryConfig(
+        items,
+        dimensions.width,
+        dimensions.height
+      );
+
+      initializeNanogallery2(galleryRef.current, config);
+      galleryInitializedRef.current = true;
+      initTimeoutRef.current = null;
+    }, 50);
+  }, [visiblePhotos, columnsCount, destroyGallery]);
+
+  // Load & append photos
   useEffect(() => {
     let mounted = true;
 
     const newPhotos = getNewPhotos(photos, prevKeysRef.current);
 
     if (newPhotos.length === 0) {
-      // Nothing new arrived; if we have any photos at all, consider initial loading finished
-      if (photos.length > 0 && prevKeysRef.current.size === 0) setLoading(false);
-      return () => { mounted = false; };
+      if (photos.length > 0 && prevKeysRef.current.size === 0) {
+        setLoading(false);
+      }
+      return () => {
+        mounted = false;
+      };
     }
 
-    const preloadAndAppend = async () => {
-      // Only show the full-page loader on the very first load
-      if (prevKeysRef.current.size === 0) setLoading(true);
+    const run = async () => {
+      if (prevKeysRef.current.size === 0) {
+        setLoading(true);
+      }
 
-      // Hide the "waiting" spinner so the gallery can render and images will begin loading
       if (spinnerUntilStart && prevKeysRef.current.size === 0) {
         setSpinnerUntilStart(false);
       }
-      
-      // Only preload the first batch of images for immediate display
-      // Nanogallery2's lazy loading will handle the rest
-      if (prevKeysRef.current.size === 0 && newPhotos.length > 0) {
+
+      if (prevKeysRef.current.size === 0) {
         const firstBatch = getFirstBatchPhotos(newPhotos, columnsCount);
         await preloadPhotoBatch(firstBatch);
       }
 
-      // Shuffle new photos so each page isn't strictly ordered
-      const shuffledNew = shufflePhotos(newPhotos);
+      if (!mounted) return;
 
-      // Add a small delay so gallery can calculate and animations look nice
-      setTimeout(() => {
-        if (!mounted) return;
-        setVisiblePhotos(prev => [...prev, ...shuffledNew]);
-        // Mark initial load as finished
-        if (prevKeysRef.current.size === 0) setLoading(false);
-
-        // Update the set of seen keys to include all photos we've been given
-        prevKeysRef.current = new Set(photos.map(p => p.key));
-      }, 400);
+      setVisiblePhotos((prev) => [...prev, ...shufflePhotos(newPhotos)]);
+      setLoading(false);
+      prevKeysRef.current = new Set(photos.map((p) => p.key));
     };
 
-    preloadAndAppend();
+    run();
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [photos, spinnerUntilStart, columnsCount]);
 
-  // Initialize or reinitialize the gallery whenever visiblePhotos changes
+  // Init gallery when ready
   useEffect(() => {
-    if (visiblePhotos.length > 0 && !loading) {
-      const timer = setTimeout(() => {
-        initializeGallery();
-      }, 100);
-      return () => clearTimeout(timer);
+    if (!loading && visiblePhotos.length > 0) {
+      initializeGallery();
     }
   }, [visiblePhotos, loading, initializeGallery]);
 
+  // Cleanup on route change
+  useEffect(() => {
+    return () => {
+      if (initTimeoutRef.current) {
+        clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
+      destroyGallery();
+    };
+  }, [destroyGallery]);
+
   if (loading) {
     return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          height: '50vh',
-          flexDirection: 'column',
-          gap: 2
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "50vh",
+          flexDirection: "column",
+          gap: 2,
         }}
       >
         <CircularProgress />
-        <Box sx={{ color: 'text.secondary' }}>Loading gallery...</Box>
+        <Box sx={{ color: "text.secondary" }}>Loading gallery…</Box>
       </Box>
     );
   }
 
   return (
-    <Container maxWidth={false} sx={{ marginTop: 4, px: { xs: 2, sm: 3, md: 6 }, py: { xs: 4, md: 8 } }}>
+    <Container
+      maxWidth={false}
+      sx={{ mt: 4, px: { xs: 2, sm: 3, md: 6 }, py: { xs: 4, md: 8 } }}
+    >
       <style>
         {`
           .nanogallery2 .nGY2 .ngy2-i-title,
@@ -131,30 +182,24 @@ export const MainImageDisplay = ({
           .nGY2Gallery .ngy2-description {
             display: none !important;
           }
-          
-          /* Enhanced gallery styling */
-          .nGY2Gallery {
-            gap: 16px !important;
-          }
-          
+
+          .nGY2Gallery { gap: 16px !important; }
+
           .nGY2Gallery .ngy2-item {
             border-radius: 12px !important;
             overflow: hidden !important;
             box-shadow: 0 4px 12px rgba(255, 179, 0, 0.1) !important;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
           }
-          
+
           .nGY2Gallery .ngy2-item:hover {
             box-shadow: 0 12px 32px rgba(255, 179, 0, 0.25) !important;
             transform: translateY(-4px) !important;
           }
         `}
       </style>
-      <div
-        id="nanogallery2"
-        ref={galleryRef}
-        data-nanogallery2="{ thumbnailHeight: 200, thumbnailAlignment: 'center' }"
-      />
+
+      <div id="nanogallery2" ref={galleryRef} />
     </Container>
   );
 };
