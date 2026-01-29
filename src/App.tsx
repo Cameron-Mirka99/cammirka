@@ -8,6 +8,7 @@ import { Box } from '@mui/material';
 import { Routes, Route } from 'react-router-dom';
 import Home, { Photo } from './pages/Home';
 import About from './pages/About';
+import { photoApiBaseUrl } from './utils/apiConfig';
 
 let initialPhotosFetched = false;
 function App() {
@@ -20,7 +21,11 @@ function App() {
   // and return { photos: Photo[] } containing up to `limit` new photos.
   const fetchPhotos = useCallback(async (excludeKeys: string[] = [], limit = 200) => {
     try {
-      const res = await fetch('https://atp0hr8g95.execute-api.us-east-1.amazonaws.com/GetPhotoList', {
+      if (!photoApiBaseUrl) {
+        throw new Error('REACT_APP_PHOTO_API_URL is not configured');
+      }
+
+      const res = await fetch(`${photoApiBaseUrl}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ excludeKeys, limit }),
