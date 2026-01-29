@@ -16,7 +16,6 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@aws-sdk/client-s3": "^3.744.0",
-    "@aws-sdk/s3-request-presigner": "^3.744.0",
     "jquery": "^4.0.0",
     "nanogallery2": "^3.0.5",
     "react": "^18.3.1",

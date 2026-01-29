@@ -1,25 +1,52 @@
 import { defineBackend } from "@aws-amplify/backend";
 import { Stack } from "aws-cdk-lib";
 import { AuthorizationType, Cors, LambdaIntegration, RestApi } from "aws-cdk-lib/aws-apigateway";
+import { Distribution, OriginAccessIdentity } from "aws-cdk-lib/aws-cloudfront";
+import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
+import { Bucket } from "aws-cdk-lib/aws-s3";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
-import { storage } from "./storage/resource.js";
 
 const backend = defineBackend({
   getPhotoList,
-  storage,
   uploadImageFunction,
 });
 
 const apiStack = backend.createStack("PhotoApiStack");
+const infraStack = backend.createStack("PhotoInfraStack");
+
+const photoBucket = Bucket.fromBucketName(
+  infraStack,
+  "PhotoAssetsBucket",
+  "my-photo-site-assets",
+);
+
+const originAccessIdentity = new OriginAccessIdentity(
+  infraStack,
+  "PhotoAssetsOAI",
+);
+
+const distribution = new Distribution(infraStack, "PhotoAssetsDistribution", {
+  defaultBehavior: {
+    origin: new S3Origin(photoBucket, { originAccessIdentity }),
+  },
+});
+
+photoBucket.grantRead(originAccessIdentity);
+photoBucket.grantReadWrite(backend.uploadImageFunction.resources.lambda);
+photoBucket.grantRead(backend.getPhotoList.resources.lambda);
 
 backend.uploadImageFunction.addEnvironment(
   "BUCKET_NAME",
-  backend.storage.resources.bucket.bucketName,
+  photoBucket.bucketName,
 );
 backend.getPhotoList.addEnvironment(
   "BUCKET_NAME",
-  backend.storage.resources.bucket.bucketName,
+  photoBucket.bucketName,
+);
+backend.getPhotoList.addEnvironment(
+  "CLOUDFRONT_DOMAIN",
+  distribution.domainName,
 );
 
 const restApi = new RestApi(apiStack, "PhotoApi", {
@@ -47,6 +74,9 @@ photosResource.addMethod("POST", listPhotosIntegration, {
 
 backend.addOutput({
   custom: {
+    cloudfront: {
+      domain: distribution.domainName,
+    },
     photoApi: {
       url: restApi.url,
       name: restApi.restApiName,

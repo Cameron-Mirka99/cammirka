@@ -1,16 +1,11 @@
-import {
-  GetObjectCommand,
-  ListObjectsV2Command,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.BUCKET_NAME;
+const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
 const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 const DEFAULT_LIMIT = Number.parseInt(process.env.DEFAULT_LIMIT ?? "200", 10);
-const URL_TTL = Number.parseInt(process.env.URL_TTL ?? "300", 10);
 
 type RequestBody = {
   excludeKeys?: string[];
@@ -21,6 +16,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
     if (!BUCKET) {
       return response(500, { message: "BUCKET_NAME is not configured" });
+    }
+    if (!CLOUDFRONT_DOMAIN) {
+      return response(500, { message: "CLOUDFRONT_DOMAIN is not configured" });
     }
 
     let excludeKeys: string[] = [];
@@ -69,7 +67,6 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         new ListObjectsV2Command({
           Bucket: BUCKET,
           ContinuationToken: continuationToken,
-          Prefix: "uploads/",
         }),
       );
 
@@ -94,19 +91,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
     } while (continuationToken);
 
-    const photos = await Promise.all(
-      reservoir.map(async (key) => {
-        const url = await getSignedUrl(
-          s3,
-          new GetObjectCommand({
-            Bucket: BUCKET,
-            Key: key,
-          }),
-          { expiresIn: URL_TTL },
-        );
-        return { key, url };
-      }),
-    );
+    const baseUrl = `https://${CLOUDFRONT_DOMAIN}`.replace(/\/+$/, "");
+    const photos = reservoir.map((key) => ({
+      key,
+      url: `${baseUrl}/${encodeURI(key)}`,
+    }));
 
     return response(200, {
       photos,
