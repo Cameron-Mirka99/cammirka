@@ -13,11 +13,11 @@ const backend = defineBackend({
 
 const apiStack = backend.createStack("PhotoApiStack");
 
-backend.uploadImageFunction.resources.lambda.addEnvironment(
+backend.uploadImageFunction.addEnvironment(
   "BUCKET_NAME",
   backend.storage.resources.bucket.bucketName,
 );
-backend.getPhotoList.resources.lambda.addEnvironment(
+backend.getPhotoList.addEnvironment(
   "BUCKET_NAME",
   backend.storage.resources.bucket.bucketName,
 );
