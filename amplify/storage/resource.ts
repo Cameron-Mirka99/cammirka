@@ -1,6 +1,6 @@
 import { defineStorage } from "@aws-amplify/backend";
-import { getPhotoList } from "../functions/getPhotoList/resource";
-import { uploadImageFunction } from "../functions/uploadImageFunction/resource";
+import { getPhotoList } from "../functions/getPhotoList/resource.js";
+import { uploadImageFunction } from "../functions/uploadImageFunction/resource.js";
 
 export const storage = defineStorage({
   name: "photoSiteAssets",

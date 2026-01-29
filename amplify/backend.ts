@@ -1,9 +1,9 @@
 import { defineBackend } from "@aws-amplify/backend";
 import { Stack } from "aws-cdk-lib";
 import { AuthorizationType, Cors, LambdaIntegration, RestApi } from "aws-cdk-lib/aws-apigateway";
-import { getPhotoList } from "./functions/getPhotoList/resource";
-import { uploadImageFunction } from "./functions/uploadImageFunction/resource";
-import { storage } from "./storage/resource";
+import { getPhotoList } from "./functions/getPhotoList/resource.js";
+import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
+import { storage } from "./storage/resource.js";
 
 const backend = defineBackend({
   getPhotoList,
