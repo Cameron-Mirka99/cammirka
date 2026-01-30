@@ -58,7 +58,7 @@ export default function Login() {
   return (
     <>
       <Header />
-      <Container maxWidth="sm" sx={{ mt: { xs: 10, sm: 12, md: 14 }, color: "white" }}>
+      <Container maxWidth="sm" sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "white" }}>
         <Typography variant="h4" sx={{ mb: 3 }}>
           Sign in
         </Typography>

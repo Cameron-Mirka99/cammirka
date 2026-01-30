@@ -117,7 +117,7 @@ export default function MyPhotos() {
     return (
       <>
         <Header />
-        <Container sx={{ mt: 16, color: "text.secondary" }}>
+        <Container sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "text.secondary" }}>
           <Typography>Please sign in to view your photos.</Typography>
         </Container>
       </>
@@ -128,7 +128,7 @@ export default function MyPhotos() {
     return (
       <>
         <Header />
-        <Container sx={{ mt: 16, color: "text.secondary" }}>
+        <Container sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "text.secondary" }}>
           <Typography>
             Your account is not yet linked to a folder. Make sure you signed up
             with a valid invite link.
