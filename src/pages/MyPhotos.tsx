@@ -115,20 +115,26 @@ export default function MyPhotos() {
 
   if (status === "signedOut") {
     return (
-      <Container sx={{ mt: 16, color: "text.secondary" }}>
-        <Typography>Please sign in to view your photos.</Typography>
-      </Container>
+      <>
+        <Header />
+        <Container sx={{ mt: 16, color: "text.secondary" }}>
+          <Typography>Please sign in to view your photos.</Typography>
+        </Container>
+      </>
     );
   }
 
   if (!user?.folderId && !isAdmin) {
     return (
-      <Container sx={{ mt: 16, color: "text.secondary" }}>
-        <Typography>
-          Your account is not yet linked to a folder. Make sure you signed up
-          with a valid invite link.
-        </Typography>
-      </Container>
+      <>
+        <Header />
+        <Container sx={{ mt: 16, color: "text.secondary" }}>
+          <Typography>
+            Your account is not yet linked to a folder. Make sure you signed up
+            with a valid invite link.
+          </Typography>
+        </Container>
+      </>
     );
   }
 
