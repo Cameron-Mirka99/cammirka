@@ -1,5 +1,5 @@
 import { Box, CircularProgress, Container } from "@mui/material";
-import { Photo } from "../pages/Home";
+import { Photo } from "../types/photo";
 import { useState, useEffect, useRef, useCallback } from "react";
 import photoCache from "../utils/photoCache";
 import {
@@ -19,9 +19,10 @@ import "jquery";
 type MainImageDisplayProps = {
   photos: Array<Photo>;
   columnsCount: number;
+  loading?: boolean;
 };
 
-export const MainImageDisplay = ({ photos, columnsCount }: MainImageDisplayProps) => {
+export const MainImageDisplay = ({ photos, columnsCount, loading: loadingProp }: MainImageDisplayProps) => {
   const [loading, setLoading] = useState(true);
   const [visiblePhotos, setVisiblePhotos] = useState<Photo[]>([]);
   const [spinnerUntilStart, setSpinnerUntilStart] = useState(true);
@@ -151,7 +152,9 @@ export const MainImageDisplay = ({ photos, columnsCount }: MainImageDisplayProps
     };
   }, [destroyGallery]);
 
-  if (loading) {
+  const isLoading = loadingProp ?? loading;
+
+  if (isLoading) {
     return (
       <Box
         sx={{
@@ -164,7 +167,25 @@ export const MainImageDisplay = ({ photos, columnsCount }: MainImageDisplayProps
         }}
       >
         <CircularProgress />
-        <Box sx={{ color: "text.secondary" }}>Loading gallery…</Box>
+        <Box sx={{ color: "text.secondary" }}>Loading gallery...</Box>
+      </Box>
+    );
+  }
+
+  if (!isLoading && visiblePhotos.length === 0) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "30vh",
+          flexDirection: "column",
+          gap: 2,
+          color: "text.secondary",
+        }}
+      >
+        No photos found.
       </Box>
     );
   }

@@ -2,7 +2,7 @@
  * Photo preloading and batch management utilities
  */
 
-import { Photo } from '../pages/Home';
+import { Photo } from '../types/photo';
 import photoCache from './photoCache';
 
 /**

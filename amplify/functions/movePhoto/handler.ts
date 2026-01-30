@@ -1,19 +1,19 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
-const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME;
-const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const s3 = new S3Client({ region: process.env.AWS_REGION });
 
 export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!BUCKET_NAME || !FOLDERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+    if (!BUCKET_NAME) {
+      return response(500, { message: "BUCKET_NAME is not configured." });
     }
 
     const claims = getClaims(event);
@@ -22,50 +22,43 @@ export const handler = async (
     }
 
     const body = parseBody(event);
-    const image = body?.image;
-    const imageName = body?.imageName;
-    const folderId = sanitizeFolderId(body?.folderId);
+    const sourceKey = body?.sourceKey?.trim();
+    const destinationFolderId = sanitizeFolderId(body?.destinationFolderId);
 
-    if (!image || !imageName || !folderId) {
+    if (!sourceKey || !destinationFolderId) {
       return response(400, {
-        message: "folderId, image, and imageName are required.",
+        message: "sourceKey and destinationFolderId are required.",
       });
     }
 
-    let imageBuffer: Buffer;
-    try {
-      imageBuffer = Buffer.from(image, "base64");
-    } catch {
-      return response(400, { message: "Invalid base64 image." });
+    const fileName = sourceKey.split("/").pop();
+    if (!fileName) {
+      return response(400, { message: "Invalid sourceKey." });
     }
 
-    const folderExists = await ddb.send(
-      new GetCommand({
-        TableName: FOLDERS_TABLE_NAME,
-        Key: { folderId },
+    const destinationKey = `${destinationFolderId}/${fileName}`;
+    const copySource = `${BUCKET_NAME}/${encodeKey(sourceKey)}`;
+
+    await s3.send(
+      new CopyObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: destinationKey,
+        CopySource: copySource,
       }),
     );
 
-    if (!folderExists.Item) {
-      return response(404, { message: "Folder does not exist." });
-    }
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: sourceKey,
+      }),
+    );
 
-    const imageKey = `${folderId}/${imageName}`;
-
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: imageKey,
-      Body: imageBuffer,
-      ContentType: guessContentType(imageName) || "application/octet-stream",
-    });
-
-    await s3.send(putCommand);
-
-    return response(200, { message: `Image uploaded successfully as ${imageKey}` });
+    return response(200, { sourceKey, destinationKey });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: `Server error: ${message}` });
+    return response(500, { message: "Failed to move photo.", error: message });
   }
 };
 
@@ -84,6 +77,10 @@ function sanitizeFolderId(value?: string) {
   if (!trimmed) return null;
   if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
   return trimmed;
+}
+
+function encodeKey(key: string) {
+  return encodeURIComponent(key).replace(/%2F/g, "/");
 }
 
 function getClaims(event: APIGatewayProxyEvent) {
@@ -114,19 +111,4 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
-}
-
-function guessContentType(filename: string) {
-  const ext = filename.toLowerCase().split(".").pop();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    default:
-      return null;
-  }
 }
