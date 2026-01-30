@@ -1,0 +1,28 @@
+import React from "react";
+import { Navigate } from "react-router-dom";
+import { Box, Typography } from "@mui/material";
+import { useAuth } from "./AuthProvider";
+
+export const RequireAdmin: React.FC<{ children: React.ReactElement }> = ({
+  children,
+}) => {
+  const { status, user } = useAuth();
+
+  if (status === "loading") {
+    return (
+      <Box sx={{ mt: 16, textAlign: "center", color: "text.secondary" }}>
+        <Typography>Loading...</Typography>
+      </Box>
+    );
+  }
+
+  if (status === "signedOut") {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user?.groups.includes("admin")) {
+    return <Navigate to="/my-photos" replace />;
+  }
+
+  return children;
+};

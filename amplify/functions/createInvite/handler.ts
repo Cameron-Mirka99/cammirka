@@ -1,18 +1,18 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import crypto from "crypto";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
-const s3 = new S3Client({ region: process.env.AWS_REGION });
-const BUCKET_NAME = process.env.BUCKET_NAME;
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
+const INVITES_TABLE_NAME = process.env.INVITES_TABLE_NAME;
+
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!BUCKET_NAME || !FOLDERS_TABLE_NAME) {
+    if (!FOLDERS_TABLE_NAME || !INVITES_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -22,50 +22,50 @@ export const handler = async (
     }
 
     const body = parseBody(event);
-    const image = body?.image;
-    const imageName = body?.imageName;
     const folderId = sanitizeFolderId(body?.folderId);
-
-    if (!image || !imageName || !folderId) {
-      return response(400, {
-        message: "folderId, image, and imageName are required.",
-      });
+    if (!folderId) {
+      return response(400, { message: "folderId is required." });
     }
 
-    let imageBuffer: Buffer;
-    try {
-      imageBuffer = Buffer.from(image, "base64");
-    } catch {
-      return response(400, { message: "Invalid base64 image." });
-    }
-
-    const folderExists = await ddb.send(
+    const folderResult = await ddb.send(
       new GetCommand({
         TableName: FOLDERS_TABLE_NAME,
         Key: { folderId },
       }),
     );
 
-    if (!folderExists.Item) {
-      return response(404, { message: "Folder does not exist." });
+    if (!folderResult.Item) {
+      return response(404, { message: "Folder not found." });
     }
 
-    const imageKey = `${folderId}/${imageName}`;
+    const expiresInDays =
+      Number.isFinite(body?.expiresInDays) && body.expiresInDays > 0
+        ? Math.floor(body.expiresInDays)
+        : 30;
+    const expiresAt = Math.floor(Date.now() / 1000) + expiresInDays * 86400;
+    const inviteCode = crypto.randomBytes(16).toString("hex");
+    const createdAt = new Date().toISOString();
+    const createdBy =
+      claims?.["cognito:username"] ?? claims?.username ?? "unknown";
 
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: imageKey,
-      Body: imageBuffer,
-      ContentType: guessContentType(imageName) || "application/octet-stream",
-    });
+    await ddb.send(
+      new PutCommand({
+        TableName: INVITES_TABLE_NAME,
+        Item: {
+          inviteCode,
+          folderId,
+          expiresAt,
+          createdAt,
+          createdBy,
+        },
+      }),
+    );
 
-    await s3.send(putCommand);
-
-    return response(200, { message: `Image uploaded successfully as ${imageKey}` });
+    return response(201, { inviteCode, folderId, expiresAt });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: `Server error: ${message}` });
+    return response(500, { message: "Failed to create invite.", error: message });
   }
 };
 
@@ -114,19 +114,4 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
-}
-
-function guessContentType(filename: string) {
-  const ext = filename.toLowerCase().split(".").pop();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    default:
-      return null;
-  }
 }

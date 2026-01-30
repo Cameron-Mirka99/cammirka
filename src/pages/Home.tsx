@@ -1,39 +1,61 @@
-import { useTheme, useMediaQuery, Box, Container, Typography } from '@mui/material';
+import { Box, Container, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Header } from '../components/Header';
 import { MainImageDisplay } from '../components/MainImageDisplay';
+import { Photo } from '../types/photo';
+import { photoApiBaseUrl } from '../utils/apiConfig';
 
-export type Photo = {
-  key: string,
-  url: string
-}
-
-type HomeProps = {
-  photos: Array<Photo>;
-  loading: boolean;
-}
-
-function Home({ photos, loading, ...props } : HomeProps) {
+function Home({ ...props }) {
   const theme = useTheme();
-  
-  // Set dynamic column count based on screen width.
   const isSm = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const isMd = useMediaQuery(theme.breakpoints.between('md', 'lg'));
   const isLg = useMediaQuery(theme.breakpoints.up('lg'));
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  let columnsCount;
+  let columnsCount = 1;
   if (isLg) {
     columnsCount = 3;
-  } else if (isMd) {
+  } else if (isMd || isSm) {
     columnsCount = 2;
-  } else if (isSm) {
-    columnsCount = 2;
-  } else {
-    columnsCount = 1;
   }
 
-  // Cap at maximum 3 columns
-  columnsCount = Math.min(columnsCount, 3);
+  const fetchPhotos = useCallback(async (excludeKeys: string[] = [], limit = 200) => {
+    try {
+      if (!photoApiBaseUrl) {
+        throw new Error('REACT_APP_PHOTO_API_URL is not configured');
+      }
+
+      const res = await fetch(`${photoApiBaseUrl}/public-photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ excludeKeys, limit }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch photos: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const incoming: Array<Photo> = Array.isArray(data.photos) ? data.photos : [];
+
+      setPhotos(prev => {
+        const existingKeys = new Set(prev.map(p => p.key));
+        const filtered = incoming.filter(p => !existingKeys.has(p.key));
+        return [...prev, ...filtered];
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to fetch photos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPhotos([], 200);
+  }, [fetchPhotos]);
 
   return (
     <>
@@ -86,6 +108,7 @@ function Home({ photos, loading, ...props } : HomeProps) {
       <MainImageDisplay
         photos={photos}
         columnsCount={columnsCount}
+        loading={loading}
       />
     </>
   );

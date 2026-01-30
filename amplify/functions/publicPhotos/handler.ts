@@ -6,11 +6,7 @@ const BUCKET = process.env.BUCKET_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
 const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 const DEFAULT_LIMIT = Number.parseInt(process.env.DEFAULT_LIMIT ?? "200", 10);
-
-type RequestBody = {
-  excludeKeys?: string[];
-  limit?: number;
-};
+const PUBLIC_PREFIX = "public/";
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -23,28 +19,17 @@ export const handler = async (
       return response(500, { message: "CLOUDFRONT_DOMAIN is not configured" });
     }
 
-    const claims = getClaims(event);
-    if (!claims) {
-      return response(401, { message: "Unauthorized." });
-    }
-
-    const isAdminUser = isAdmin(claims);
-
     let excludeKeys: string[] = [];
     let limit = DEFAULT_LIMIT;
-    let requestedFolderId: string | undefined;
 
     if (event?.body) {
       try {
         const body = (typeof event.body === "string"
           ? JSON.parse(event.body)
-          : event.body) as RequestBody & { folderId?: string };
+          : event.body) as { excludeKeys?: string[]; limit?: number };
         if (Array.isArray(body.excludeKeys)) excludeKeys = body.excludeKeys;
         if (Number.isInteger(body.limit) && (body.limit ?? 0) > 0) {
           limit = body.limit!;
-        }
-        if (typeof body.folderId === "string") {
-          requestedFolderId = body.folderId;
         }
       } catch {
         // ignore body parse errors
@@ -67,19 +52,6 @@ export const handler = async (
           limit = parsed;
         }
       }
-      if (query.folderId) {
-        requestedFolderId = query.folderId;
-      }
-    }
-
-    const folderId = resolveFolderId({
-      claims,
-      requestedFolderId,
-      isAdminUser,
-    });
-
-    if (!folderId) {
-      return response(403, { message: "Folder access not available." });
     }
 
     const excludeSet = new Set(excludeKeys);
@@ -93,7 +65,7 @@ export const handler = async (
         new ListObjectsV2Command({
           Bucket: BUCKET,
           ContinuationToken: continuationToken,
-          Prefix: `${folderId}/`,
+          Prefix: PUBLIC_PREFIX,
         }),
       );
 
@@ -132,7 +104,7 @@ export const handler = async (
         excludedCount: excludeSet.size,
         scanned,
         eligibleCount,
-        folderId,
+        folderId: "public",
       },
     });
   } catch (err) {
@@ -153,45 +125,4 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
-}
-
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims: Record<string, string>) {
-  const groups = claims["cognito:groups"];
-  return typeof groups === "string" && groups.includes("admin");
-}
-
-function resolveFolderId({
-  claims,
-  requestedFolderId,
-  isAdminUser,
-}: {
-  claims: Record<string, string>;
-  requestedFolderId?: string;
-  isAdminUser: boolean;
-}) {
-  if (isAdminUser && requestedFolderId) {
-    return sanitizeFolderId(requestedFolderId);
-  }
-
-  const folderId = claims["custom:folderId"];
-  return sanitizeFolderId(folderId);
-}
-
-function sanitizeFolderId(value?: string) {
-  if (!value) return null;
-  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
-  if (!trimmed) return null;
-  if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
-  return trimmed;
 }
