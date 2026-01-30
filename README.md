@@ -44,3 +44,29 @@ You don’t have to ever use `eject`. The curated feature set is suitable for sm
 You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
 To learn React, check out the [React documentation](https://reactjs.org/).
+
+## Local development setup
+
+1) Install dependencies:
+```bash
+npm install
+```
+
+2) Provide your API base URL:
+```bash
+cp .env.local.example .env.local
+```
+Edit `.env.local` and set:
+```
+REACT_APP_PHOTO_API_URL=https://<your-api-id>.execute-api.us-east-1.amazonaws.com/prod
+```
+
+3) Generate Amplify outputs (required for auth):
+```bash
+npx ampx sandbox --outputs-out-dir src --outputs-format json
+```
+
+4) Run the app:
+```bash
+npm start
+```

@@ -21,3 +21,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Amplify sandbox artifacts
+.amplify/
+**/tsconfig.tsbuildinfo

@@ -1,0 +1,50 @@
+{
+  "auth": {
+    "user_pool_id": "us-east-1_ObguaZFRf",
+    "aws_region": "us-east-1",
+    "user_pool_client_id": "6tsl1vd3nd0t6b45rnqq67a54b",
+    "identity_pool_id": "us-east-1:f3fde466-8de4-4a8d-83c0-04671197db0c",
+    "mfa_methods": [],
+    "standard_required_attributes": [
+      "email"
+    ],
+    "username_attributes": [
+      "email"
+    ],
+    "user_verification_types": [
+      "email"
+    ],
+    "groups": [
+      {
+        "admin": {
+          "precedence": 0
+        }
+      },
+      {
+        "user": {
+          "precedence": 1
+        }
+      }
+    ],
+    "mfa_configuration": "NONE",
+    "password_policy": {
+      "min_length": 8,
+      "require_lowercase": true,
+      "require_numbers": true,
+      "require_symbols": true,
+      "require_uppercase": true
+    },
+    "unauthenticated_identities_enabled": true
+  },
+  "version": "1.4",
+  "custom": {
+    "cloudfront": {
+      "domain": "d67nsihv84hw.cloudfront.net"
+    },
+    "photoApi": {
+      "url": "https://2jeeq3ui58.execute-api.us-east-1.amazonaws.com/prod/",
+      "name": "photo-site-api",
+      "region": "us-east-1"
+    }
+  }
+}
