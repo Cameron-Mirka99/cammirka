@@ -32,8 +32,16 @@ export default function Admin() {
     });
     if (!res.ok) return;
     const payload = await res.json();
-    const items = Array.isArray(payload.folders) ? payload.folders : [];
-    setFolders(items);
+    const items: Array<{ folderId: string; displayName?: string }> = Array.isArray(
+      payload.folders,
+    )
+      ? payload.folders
+      : [];
+    const withDefault = [
+      { folderId: "public", displayName: "Public Gallery" },
+      ...items.filter((item) => item.folderId !== "public"),
+    ];
+    setFolders(withDefault);
   };
 
   useEffect(() => {
@@ -139,6 +147,32 @@ export default function Admin() {
     setMoveDestination("");
   };
 
+  const deleteFolder = async (folderIdToDelete: string) => {
+    setStatusMessage(null);
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete folder "${folderIdToDelete}" and all its contents? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    const res = await authFetch(`${apiBase}/folders`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId: folderIdToDelete }),
+    });
+    const payload = await res.json();
+    if (!res.ok) {
+      setStatusMessage(payload?.message ?? "Delete failed.");
+      return;
+    }
+    setStatusMessage(`Deleted folder ${payload.folderId}`);
+    setSelectedFolder(null);
+    loadFolders().catch(() => undefined);
+  };
+
   return (
     <>
       <Header />
@@ -170,6 +204,8 @@ export default function Admin() {
                 borderRadius: 2,
                 padding: 2,
                 background: "rgba(0,0,0,0.2)",
+                maxHeight: "70vh",
+                overflowY: "auto",
               }}
             >
               <Typography variant="h6" sx={{ mb: 2 }}>
@@ -181,7 +217,9 @@ export default function Admin() {
                 </Box>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {folders.map((folder) => (
+                  {folders.map((folder) => {
+                    const isDefault = folder.folderId === "public";
+                    return (
                     <Box
                       key={folder.folderId}
                       onClick={() => {
@@ -197,38 +235,74 @@ export default function Admin() {
                         padding: "6px 10px",
                         borderRadius: 1,
                         background:
-                          selectedFolder === folder.folderId
+                          isDefault
+                            ? "rgba(0, 217, 255, 0.16)"
+                            : selectedFolder === folder.folderId
                             ? "rgba(255, 179, 0, 0.2)"
                             : "rgba(255,255,255,0.06)",
                         fontSize: "0.9rem",
                         cursor: "pointer",
                         border:
-                          selectedFolder === folder.folderId
+                          isDefault
+                            ? "1px solid rgba(0, 217, 255, 0.5)"
+                            : selectedFolder === folder.folderId
                             ? "1px solid rgba(255, 179, 0, 0.5)"
                             : "1px solid transparent",
                       }}
                     >
-                      {folder.displayName ?? folder.folderId}
-                      <Box
-                        sx={{
-                          fontSize: "0.75rem",
-                          color: "rgba(255,255,255,0.6)",
-                        }}
-                      >
-                        {folder.folderId}
+                      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
+                        <Box>
+                          <Box sx={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.9)" }}>
+                            {folder.displayName ?? folder.folderId}
+                          </Box>
+                          <Box
+                            sx={{
+                              fontSize: "0.75rem",
+                              color: "rgba(255,255,255,0.6)",
+                              display: "flex",
+                              gap: 1,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <strong>Id:</strong>
+                            <span>{folder.folderId}</span>
+                          </Box>
+                        </Box>
+                        {!isDefault && (
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteFolder(folder.folderId);
+                            }}
+                            sx={{
+                              color: "rgba(255,255,255,0.7)",
+                              minWidth: "auto",
+                              padding: "0 6px",
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </Box>
                     </Box>
-                  ))}
+                  );
+                  })}
                 </Box>
               )}
             </Box>
 
             <Box>
-              <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Create Folder
-                </Typography>
-                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Create Folder
+              </Typography>
+              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+                Example: folder ID <strong>client-jones</strong>, display name{" "}
+                <strong>Jones Family</strong>
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                   <TextField
                     label="Folder ID"
                     value={folderId}
@@ -251,11 +325,14 @@ export default function Admin() {
                 </Box>
               </Box>
 
-              <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Create Invite
-                </Typography>
-                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Create Invite
+              </Typography>
+              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+                Example: create an invite for <strong>client-jones</strong>
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                   <TextField
                     label="Folder ID"
                     value={inviteFolderId}
@@ -275,12 +352,16 @@ export default function Admin() {
                 )}
               </Box>
 
-              <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Upload Photo (Admin Only)
-                </Typography>
-                <Box
-                  sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Upload Photo (Admin Only)
+              </Typography>
+              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+                Example: folder ID <strong>client-jones</strong>, file{" "}
+                <strong>IMG_1234.jpg</strong>
+              </Typography>
+              <Box
+                sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}
                 >
                   <TextField
                     label="Folder ID"
@@ -309,11 +390,15 @@ export default function Admin() {
                 )}
               </Box>
 
-              <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Move Photo
-                </Typography>
-                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Move Photo
+              </Typography>
+              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+                Example: move <strong>client-jones/IMG_1234.jpg</strong> to{" "}
+                <strong>client-smith</strong>
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                   <TextField
                     label="Source key"
                     value={moveSourceKey}

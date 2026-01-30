@@ -1,11 +1,13 @@
 import { AppBar, Button, Slide, Toolbar, Typography, useScrollTrigger, Box } from "@mui/material";
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from "../auth/AuthProvider";
 
 export const Header = ({...props}) => {
+    const location = useLocation();
     const { status, user, signOut } = useAuth();
     const isSignedIn = status === "signedIn";
     const isAdmin = Boolean(user?.groups.includes("admin"));
+    const isActive = (path: string) => location.pathname === path;
 
     function HideOnScroll(props : {children: React.ReactElement, window?: () => Window}) {
         const { children, window } = props;
@@ -90,10 +92,11 @@ export const Header = ({...props}) => {
               letterSpacing: '0.5px',
               position: 'relative',
               border: 'none',
-              background: 'rgba(255, 179, 0, 0.1)',
+              background: isActive('/about') ? 'rgba(255, 179, 0, 0.28)' : 'rgba(255, 179, 0, 0.1)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               overflow: 'hidden',
               borderRadius: '4px',
+              boxShadow: isActive('/about') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
               '&::before': {
                 content: '""',
                 position: 'absolute',
@@ -126,12 +129,39 @@ export const Header = ({...props}) => {
               component={Link}
               to="/my-photos"
               sx={{
-                fontSize: { xs: 'clamp(0.85rem, 3vw, 1.1rem)', md: 'clamp(0.95rem, 3vw, 1.2rem)' },
+                fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
                 textTransform: 'uppercase',
                 fontWeight: 600,
                 letterSpacing: '0.5px',
+                position: 'relative',
+                border: 'none',
+                background: isActive('/my-photos') ? 'rgba(255, 179, 0, 0.28)' : 'rgba(255, 179, 0, 0.1)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
                 borderRadius: '4px',
-                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: isActive('/my-photos') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '0',
+                  left: '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                  transition: 'left 0.3s ease',
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                  boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                  transform: 'translateY(-2px)',
+                  '&::before': {
+                    left: '100%',
+                  }
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                }
               }}
             >
               My Photos
@@ -144,12 +174,39 @@ export const Header = ({...props}) => {
               component={Link}
               to="/admin"
               sx={{
-                fontSize: { xs: 'clamp(0.85rem, 3vw, 1.1rem)', md: 'clamp(0.95rem, 3vw, 1.2rem)' },
+                fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
                 textTransform: 'uppercase',
                 fontWeight: 600,
                 letterSpacing: '0.5px',
+                position: 'relative',
+                border: 'none',
+                background: isActive('/admin') ? 'rgba(255, 179, 0, 0.28)' : 'rgba(255, 179, 0, 0.1)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
                 borderRadius: '4px',
-                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: isActive('/admin') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '0',
+                  left: '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                  transition: 'left 0.3s ease',
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                  boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                  transform: 'translateY(-2px)',
+                  '&::before': {
+                    left: '100%',
+                  }
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                }
               }}
             >
               Admin
@@ -162,12 +219,39 @@ export const Header = ({...props}) => {
               component={Link}
               to="/login"
               sx={{
-                fontSize: { xs: 'clamp(0.85rem, 3vw, 1.1rem)', md: 'clamp(0.95rem, 3vw, 1.2rem)' },
+                fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
                 textTransform: 'uppercase',
                 fontWeight: 600,
                 letterSpacing: '0.5px',
+                position: 'relative',
+                border: 'none',
+                background: isActive('/login') ? 'rgba(255, 179, 0, 0.28)' : 'rgba(255, 179, 0, 0.1)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
                 borderRadius: '4px',
-                border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: isActive('/login') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '0',
+                  left: '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                  transition: 'left 0.3s ease',
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                  boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                  transform: 'translateY(-2px)',
+                  '&::before': {
+                    left: '100%',
+                  }
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                }
               }}
             >
               Sign In
@@ -177,12 +261,38 @@ export const Header = ({...props}) => {
               color="inherit"
               onClick={() => signOut()}
               sx={{
-                fontSize: { xs: 'clamp(0.85rem, 3vw, 1.1rem)', md: 'clamp(0.95rem, 3vw, 1.2rem)' },
+                fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
                 textTransform: 'uppercase',
                 fontWeight: 600,
                 letterSpacing: '0.5px',
+                position: 'relative',
+                border: 'none',
+                background: 'rgba(255, 179, 0, 0.1)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
                 borderRadius: '4px',
-                border: '1px solid rgba(255,255,255,0.15)',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '0',
+                  left: '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                  transition: 'left 0.3s ease',
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                  boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                  transform: 'translateY(-2px)',
+                  '&::before': {
+                    left: '100%',
+                  }
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                }
               }}
             >
               Sign Out

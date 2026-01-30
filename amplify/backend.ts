@@ -20,6 +20,7 @@ import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
 import { createFolder } from "./functions/createFolder/resource.js";
 import { createInvite } from "./functions/createInvite/resource.js";
+import { deleteFolder } from "./functions/deleteFolder/resource.js";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
@@ -31,6 +32,7 @@ const backend = defineBackend({
   acceptInvite,
   createFolder,
   createInvite,
+  deleteFolder,
   getPhotoList,
   listFolders,
   movePhoto,
@@ -74,6 +76,7 @@ photoBucket.grantReadWrite(backend.uploadImageFunction.resources.lambda);
 photoBucket.grantRead(backend.getPhotoList.resources.lambda);
 photoBucket.grantReadWrite(backend.movePhoto.resources.lambda);
 photoBucket.grantRead(backend.publicPhotos.resources.lambda);
+photoBucket.grantReadWrite(backend.deleteFolder.resources.lambda);
 
 backend.uploadImageFunction.addEnvironment(
   "BUCKET_NAME",
@@ -119,6 +122,14 @@ backend.listFolders.addEnvironment(
   "FOLDERS_TABLE_NAME",
   foldersTable.tableName,
 );
+backend.deleteFolder.addEnvironment(
+  "FOLDERS_TABLE_NAME",
+  foldersTable.tableName,
+);
+backend.deleteFolder.addEnvironment(
+  "BUCKET_NAME",
+  photoBucket.bucketName,
+);
 backend.acceptInvite.addEnvironment(
   "INVITES_TABLE_NAME",
   invitesTable.tableName,
@@ -132,6 +143,7 @@ foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
 foldersTable.grantReadData(backend.createInvite.resources.lambda);
 foldersTable.grantReadData(backend.uploadImageFunction.resources.lambda);
 foldersTable.grantReadData(backend.listFolders.resources.lambda);
+foldersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
 invitesTable.grantReadWriteData(backend.createInvite.resources.lambda);
 invitesTable.grantReadData(backend.acceptInvite.resources.lambda);
 
@@ -199,6 +211,13 @@ foldersResource.addMethod("POST", foldersIntegration, {
 });
 const listFoldersIntegration = new LambdaIntegration(backend.listFolders.resources.lambda);
 foldersResource.addMethod("GET", listFoldersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+const deleteFolderIntegration = new LambdaIntegration(
+  backend.deleteFolder.resources.lambda,
+);
+foldersResource.addMethod("DELETE", deleteFolderIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
