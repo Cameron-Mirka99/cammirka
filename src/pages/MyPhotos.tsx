@@ -1,4 +1,5 @@
 import { Box, Button, Container, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MainImageDisplay } from "../components/MainImageDisplay";
 import { Header } from "../components/Header";
@@ -13,6 +14,10 @@ export default function MyPhotos() {
   const isSm = useMediaQuery(theme.breakpoints.between("sm", "md"));
   const isMd = useMediaQuery(theme.breakpoints.between("md", "lg"));
   const isLg = useMediaQuery(theme.breakpoints.up("lg"));
+  const mutedText = theme.palette.text.secondary;
+  const panelBorder = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.12 : 0.2);
+  const panelBg = alpha(theme.palette.common.black, theme.palette.mode === "light" ? 0.04 : 0.2);
+  const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.08);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFolderId, setActiveFolderId] = useState<string | undefined>(
@@ -143,7 +148,7 @@ export default function MyPhotos() {
       <Header />
       <Container maxWidth="xl" sx={{ mt: { xs: 14, sm: 16, md: 18 } }}>
         <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
-          <Typography variant="h5" sx={{ color: "white" }}>
+          <Typography variant="h5" sx={{ color: "text.primary" }}>
             My Photos
           </Typography>
           <Button
@@ -198,19 +203,19 @@ export default function MyPhotos() {
           >
             <Box
               sx={{
-                border: "1px solid rgba(255,255,255,0.1)",
+                border: `1px solid ${panelBorder}`,
                 borderRadius: 2,
                 padding: 2,
-                background: "rgba(0,0,0,0.2)",
+                background: panelBg,
                 maxHeight: "70vh",
                 overflowY: "auto",
               }}
             >
-              <Typography variant="h6" sx={{ mb: 2, color: "white" }}>
+              <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>
                 Choose a folder
               </Typography>
               {folders.length === 0 ? (
-                <Box sx={{ color: "rgba(255,255,255,0.6)" }}>No folders yet.</Box>
+                <Box sx={{ color: mutedText }}>No folders yet.</Box>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {folders.map((folder) => (
@@ -223,7 +228,7 @@ export default function MyPhotos() {
                         background:
                           activeFolderId === folder.folderId
                             ? "rgba(255, 179, 0, 0.2)"
-                            : "rgba(255,255,255,0.06)",
+                            : itemBg,
                         fontSize: "0.9rem",
                         cursor: "pointer",
                         border:
@@ -233,7 +238,7 @@ export default function MyPhotos() {
                       }}
                     >
                       {folder.displayName ?? folder.folderId}
-                      <Box sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>
+                      <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
                         {folder.folderId}
                       </Box>
                     </Box>
@@ -250,7 +255,7 @@ export default function MyPhotos() {
                   loading={loading}
                 />
               ) : (
-                <Box sx={{ color: "rgba(255,255,255,0.7)", mt: 2 }}>
+                <Box sx={{ color: mutedText, mt: 2 }}>
                   Select a folder to view its gallery.
                 </Box>
               )}

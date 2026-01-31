@@ -58,12 +58,12 @@ export default function Login() {
   return (
     <>
       <Header />
-      <Container maxWidth="sm" sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "white" }}>
+      <Container maxWidth="sm" sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "text.primary" }}>
         <Typography variant="h4" sx={{ mb: 3 }}>
           Sign in
         </Typography>
         {message && (
-          <Box sx={{ mb: 2, color: "rgba(255,255,255,0.7)" }}>{message}</Box>
+          <Box sx={{ mb: 2, color: "text.secondary" }}>{message}</Box>
         )}
         <Authenticator />
       </Container>

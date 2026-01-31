@@ -38,7 +38,7 @@ function About() {
             variant="body1"
             sx={{
               fontSize: '1.1rem',
-              color: 'rgba(255, 255, 255, 0.8)',
+              color: 'text.secondary',
               lineHeight: 2,
               maxWidth: '700px',
             }}
@@ -69,7 +69,7 @@ function About() {
               sx={{
                 fontSize: '1rem',
                 mb: 3,
-                color: 'rgba(255, 255, 255, 0.85)',
+                color: 'text.secondary',
                 lineHeight: 1.9,
               }}
             >
@@ -101,7 +101,7 @@ function About() {
               variant="body1"
               sx={{
                 fontSize: '1rem',
-                color: 'rgba(255, 255, 255, 0.85)',
+                color: 'text.secondary',
                 lineHeight: 1.9,
                 mb: 2,
               }}
@@ -112,7 +112,7 @@ function About() {
               variant="body1"
               sx={{
                 fontSize: '1rem',
-                color: 'rgba(255, 255, 255, 0.85)',
+                color: 'text.secondary',
                 lineHeight: 1.9,
               }}
             >
@@ -204,13 +204,13 @@ function About() {
                       }}
                     />
                     <Box>
-                      <Typography sx={{ fontWeight: 600, color: '#FFFFFF', fontSize: '1rem', mb: 0.5 }}>
+                      <Typography sx={{ fontWeight: 600, color: 'text.primary', fontSize: '1rem', mb: 0.5 }}>
                         {gear.name}
                       </Typography>
                       <Typography
                         sx={{
                           fontSize: '0.9rem',
-                          color: 'rgba(255, 255, 255, 0.6)',
+                          color: 'text.secondary',
                         }}
                       >
                         {gear.description}
@@ -241,7 +241,7 @@ function About() {
               variant="body1"
               sx={{
                 fontSize: '1rem',
-                color: 'rgba(255, 255, 255, 0.85)',
+                color: 'text.secondary',
                 mb: 4,
                 lineHeight: 1.9,
               }}

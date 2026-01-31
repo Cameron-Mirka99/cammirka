@@ -1,5 +1,5 @@
 import React from "react";
-import { Box } from "@mui/material";
+import { Box, useTheme } from "@mui/material";
 import { Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home";
@@ -12,11 +12,16 @@ import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
 
 function App() {
+  const theme = useTheme();
+  const isLight = theme.palette.mode === "light";
+  const base = theme.palette.background.default;
+  const paper = theme.palette.background.paper;
+
   return (
     <Box
       sx={{
         background:
-          "linear-gradient(135deg, #0A0E27 0%, #111A3F 50%, #0A0E27 100%)",
+          `linear-gradient(135deg, ${base} 0%, ${paper} 50%, ${base} 100%)`,
         minHeight: "100vh",
         position: "relative",
       }}
@@ -41,7 +46,9 @@ function App() {
             height: "400px",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(0, 217, 255, 0.1) 0%, transparent 70%)",
+              isLight
+                ? "radial-gradient(circle, rgba(255, 179, 0, 0.18) 0%, transparent 70%)"
+                : "radial-gradient(circle, rgba(255, 179, 0, 0.12) 0%, transparent 70%)",
             filter: "blur(40px)",
             animation: "float 20s ease-in-out infinite",
           }}
@@ -55,7 +62,9 @@ function App() {
             height: "400px",
             borderRadius: "50%",
             background:
-              "radial-gradient(circle, rgba(255, 107, 157, 0.1) 0%, transparent 70%)",
+              isLight
+                ? "radial-gradient(circle, rgba(120, 130, 140, 0.14) 0%, transparent 70%)"
+                : "radial-gradient(circle, rgba(120, 130, 140, 0.12) 0%, transparent 70%)",
             filter: "blur(40px)",
             animation: "float 15s ease-in-out infinite",
             animationDelay: "5s",

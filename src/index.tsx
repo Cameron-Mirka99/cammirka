@@ -4,17 +4,15 @@ import '@aws-amplify/ui-react/styles.css';
 import './amplify';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
-import theme from './theme';
+import { ThemeModeProvider } from './themeMode';
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <ThemeModeProvider>
         <App />
-      </ThemeProvider>
+      </ThemeModeProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

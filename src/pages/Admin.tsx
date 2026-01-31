@@ -1,4 +1,5 @@
-import { Box, Button, Container, TextField, Typography } from "@mui/material";
+import { Box, Button, Container, TextField, Typography, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { Header } from "../components/Header";
@@ -21,7 +22,12 @@ export default function Admin() {
     [],
   );
 
+  const theme = useTheme();
   const isAdmin = Boolean(user?.groups.includes("admin"));
+  const mutedText = theme.palette.text.secondary;
+  const subtleBorder = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.12 : 0.2);
+  const cardBg = alpha(theme.palette.common.black, theme.palette.mode === "light" ? 0.04 : 0.2);
+  const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.08);
 
   const apiBase = photoApiBaseUrl;
 
@@ -179,14 +185,14 @@ export default function Admin() {
       {isAdmin ? (
         <Container
           maxWidth="lg"
-          sx={{ mt: { xs: 12, sm: 14, md: 16 }, color: "white" }}
+          sx={{ mt: { xs: 12, sm: 14, md: 16 }, color: "text.primary" }}
         >
           <Typography variant="h4" sx={{ mb: 4 }}>
             Admin
           </Typography>
 
           {statusMessage && (
-            <Box sx={{ mb: 3, color: "rgba(255,255,255,0.7)" }}>
+            <Box sx={{ mb: 3, color: mutedText }}>
               {statusMessage}
             </Box>
           )}
@@ -200,10 +206,10 @@ export default function Admin() {
           >
             <Box
               sx={{
-                border: "1px solid rgba(255,255,255,0.1)",
+                border: `1px solid ${subtleBorder}`,
                 borderRadius: 2,
                 padding: 2,
-                background: "rgba(0,0,0,0.2)",
+                background: cardBg,
                 maxHeight: "70vh",
                 overflowY: "auto",
               }}
@@ -212,7 +218,7 @@ export default function Admin() {
                 Folders
               </Typography>
               {folders.length === 0 ? (
-                <Box sx={{ color: "rgba(255,255,255,0.6)" }}>
+                <Box sx={{ color: mutedText }}>
                   No folders yet.
                 </Box>
               ) : (
@@ -234,12 +240,12 @@ export default function Admin() {
                       sx={{
                         padding: "6px 10px",
                         borderRadius: 1,
-                        background:
-                          isDefault
-                            ? "rgba(0, 217, 255, 0.16)"
+                          background:
+                            isDefault
+                              ? "rgba(0, 217, 255, 0.16)"
                             : selectedFolder === folder.folderId
                             ? "rgba(255, 179, 0, 0.2)"
-                            : "rgba(255,255,255,0.06)",
+                            : itemBg,
                         fontSize: "0.9rem",
                         cursor: "pointer",
                         border:
@@ -252,13 +258,13 @@ export default function Admin() {
                     >
                       <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
                         <Box>
-                          <Box sx={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.9)" }}>
+                          <Box sx={{ fontSize: "0.9rem", color: "text.primary" }}>
                             {folder.displayName ?? folder.folderId}
                           </Box>
                           <Box
                             sx={{
                               fontSize: "0.75rem",
-                              color: "rgba(255,255,255,0.6)",
+                              color: mutedText,
                               display: "flex",
                               gap: 1,
                               flexWrap: "wrap",
@@ -277,7 +283,7 @@ export default function Admin() {
                               deleteFolder(folder.folderId);
                             }}
                             sx={{
-                              color: "rgba(255,255,255,0.7)",
+                              color: mutedText,
                               minWidth: "auto",
                               padding: "0 6px",
                             }}
@@ -298,7 +304,7 @@ export default function Admin() {
               <Typography variant="h6" sx={{ mb: 1 }}>
                 Create Folder
               </Typography>
-              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+              <Typography sx={{ mb: 2, color: mutedText }}>
                 Example: folder ID <strong>client-jones</strong>, display name{" "}
                 <strong>Jones Family</strong>
               </Typography>
@@ -308,16 +314,16 @@ export default function Admin() {
                     value={folderId}
                     onChange={(event) => setFolderId(event.target.value)}
                     sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "rgba(255,255,255,0.6)" } }}
-                    InputProps={{ sx: { color: "white" } }}
+                    InputLabelProps={{ sx: { color: "text.secondary" } }}
+                    InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <TextField
                     label="Display name"
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
                     sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "rgba(255,255,255,0.6)" } }}
-                    InputProps={{ sx: { color: "white" } }}
+                    InputLabelProps={{ sx: { color: "text.secondary" } }}
+                    InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <Button variant="contained" onClick={createFolder}>
                     Create
@@ -329,7 +335,7 @@ export default function Admin() {
               <Typography variant="h6" sx={{ mb: 1 }}>
                 Create Invite
               </Typography>
-              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+              <Typography sx={{ mb: 2, color: mutedText }}>
                 Example: create an invite for <strong>client-jones</strong>
               </Typography>
               <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
@@ -338,15 +344,15 @@ export default function Admin() {
                     value={inviteFolderId}
                     onChange={(event) => setInviteFolderId(event.target.value)}
                     sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "rgba(255,255,255,0.6)" } }}
-                    InputProps={{ sx: { color: "white" } }}
+                    InputLabelProps={{ sx: { color: "text.secondary" } }}
+                    InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <Button variant="contained" onClick={createInvite}>
                     Create Invite
                   </Button>
                 </Box>
                 {inviteUrl && (
-                  <Box sx={{ mt: 2, color: "rgba(255,255,255,0.7)" }}>
+                  <Box sx={{ mt: 2, color: mutedText }}>
                     Invite URL: {inviteUrl}
                   </Box>
                 )}
@@ -356,7 +362,7 @@ export default function Admin() {
               <Typography variant="h6" sx={{ mb: 1 }}>
                 Upload Photo (Admin Only)
               </Typography>
-              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+              <Typography sx={{ mb: 2, color: mutedText }}>
                 Example: folder ID <strong>client-jones</strong>, file{" "}
                 <strong>IMG_1234.jpg</strong>
               </Typography>
@@ -368,8 +374,8 @@ export default function Admin() {
                     value={uploadFolderId}
                     onChange={(event) => setUploadFolderId(event.target.value)}
                     sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "rgba(255,255,255,0.6)" } }}
-                    InputProps={{ sx: { color: "white" } }}
+                    InputLabelProps={{ sx: { color: "text.secondary" } }}
+                    InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <Button variant="outlined" component="label">
                     Choose file
@@ -384,7 +390,7 @@ export default function Admin() {
                   </Button>
                 </Box>
                 {uploadFile && (
-                  <Box sx={{ mt: 1, color: "rgba(255,255,255,0.7)" }}>
+                  <Box sx={{ mt: 1, color: mutedText }}>
                     Selected: {uploadFile.name}
                   </Box>
                 )}
@@ -394,7 +400,7 @@ export default function Admin() {
               <Typography variant="h6" sx={{ mb: 1 }}>
                 Move Photo
               </Typography>
-              <Typography sx={{ mb: 2, color: "rgba(255,255,255,0.6)" }}>
+              <Typography sx={{ mb: 2, color: mutedText }}>
                 Example: move <strong>client-jones/IMG_1234.jpg</strong> to{" "}
                 <strong>client-smith</strong>
               </Typography>
@@ -404,16 +410,16 @@ export default function Admin() {
                     value={moveSourceKey}
                     onChange={(event) => setMoveSourceKey(event.target.value)}
                     sx={{ minWidth: 280 }}
-                    InputLabelProps={{ sx: { color: "rgba(255,255,255,0.6)" } }}
-                    InputProps={{ sx: { color: "white" } }}
+                    InputLabelProps={{ sx: { color: "text.secondary" } }}
+                    InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <TextField
                     label="Destination folder"
                     value={moveDestination}
                     onChange={(event) => setMoveDestination(event.target.value)}
                     sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "rgba(255,255,255,0.6)" } }}
-                    InputProps={{ sx: { color: "white" } }}
+                    InputLabelProps={{ sx: { color: "text.secondary" } }}
+                    InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <Button variant="contained" onClick={movePhoto}>
                     Move

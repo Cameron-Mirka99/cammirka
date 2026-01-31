@@ -92,7 +92,7 @@ function Home({ ...props }) {
             variant="body1"
             sx={{
               fontSize: { xs: '0.95rem', md: '1.1rem' },
-              color: 'rgba(255, 255, 255, 0.7)',
+              color: theme.palette.text.secondary,
               maxWidth: '700px',
               mx: 'auto',
               lineHeight: 1.8,
