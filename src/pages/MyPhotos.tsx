@@ -112,7 +112,7 @@ export default function MyPhotos() {
 
   if (status === "loading") {
     return (
-      <Container sx={{ mt: 16, color: "text.secondary" }}>
+      <Container sx={{ color: "text.secondary" }}>
         <Typography>Loading your session...</Typography>
       </Container>
     );
@@ -122,7 +122,7 @@ export default function MyPhotos() {
     return (
       <>
         <Header />
-        <Container sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "text.secondary" }}>
+        <Container sx={{ color: "text.secondary" }}>
           <Typography>Please sign in to view your photos.</Typography>
         </Container>
       </>
@@ -133,7 +133,7 @@ export default function MyPhotos() {
     return (
       <>
         <Header />
-        <Container sx={{ mt: { xs: 14, sm: 16, md: 18 }, color: "text.secondary" }}>
+        <Container sx={{ color: "text.secondary" }}>
           <Typography>
             Your account is not yet linked to a folder. Make sure you signed up
             with a valid invite link.
@@ -146,7 +146,7 @@ export default function MyPhotos() {
   return (
     <>
       <Header />
-      <Container maxWidth="xl" sx={{ mt: { xs: 14, sm: 16, md: 18 } }}>
+      <Container maxWidth="xl" sx={{ pt: { xs: 2, sm: 3, md: 4 } }}>
         <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
           <Typography variant="h5" sx={{ color: "text.primary" }}>
             My Photos

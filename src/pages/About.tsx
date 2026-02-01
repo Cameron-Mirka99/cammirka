@@ -16,7 +16,6 @@ function About() {
           background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.05) 0%, rgba(255, 107, 53, 0.05) 100%)',
           borderBottom: '1px solid rgba(255, 179, 0, 0.1)',
           py: { xs: 6, sm: 8, md: 10 },
-          mt: { xs: 8, sm: 10, md: 12 },
           position: 'relative',
           zIndex: 1,
         }}
@@ -251,19 +250,39 @@ function About() {
             <Button
               component={Link}
               to="/"
-              variant="contained"
               sx={{
-                background: 'linear-gradient(135deg, #FFB300 0%, #FF6B35 100%)',
-                color: '#000000',
-                fontWeight: 700,
-                px: 4,
-                py: 1.5,
-                fontSize: '1rem',
-                borderRadius: '8px',
-                transition: 'all 0.3s ease',
+                fontSize: { xs: '0.95rem', sm: '1rem' },
+                padding: { xs: '10px 20px', sm: '12px 28px' },
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                letterSpacing: '0.6px',
+                position: 'relative',
+                border: 'none',
+                background: 'rgba(255, 179, 0, 0.2)',
+                color: 'text.primary',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
+                borderRadius: '6px',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: '0',
+                  left: '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.25) 0%, transparent 100%)',
+                  transition: 'left 0.3s ease',
+                },
                 '&:hover': {
+                  backgroundColor: 'rgba(255, 179, 0, 0.28)',
+                  boxShadow: '0 10px 28px rgba(255, 179, 0, 0.2)',
                   transform: 'translateY(-2px)',
-                  boxShadow: '0 12px 32px rgba(255, 179, 0, 0.3)',
+                  '&::before': {
+                    left: '100%',
+                  },
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
                 },
               }}
             >

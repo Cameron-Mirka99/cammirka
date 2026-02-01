@@ -185,7 +185,7 @@ export default function Admin() {
       {isAdmin ? (
         <Container
           maxWidth="lg"
-          sx={{ mt: { xs: 12, sm: 14, md: 16 }, color: "text.primary" }}
+          sx={{ color: "text.primary", pt: { xs: 2, sm: 3, md: 4 } }}
         >
           <Typography variant="h4" sx={{ mb: 4 }}>
             Admin
@@ -430,7 +430,7 @@ export default function Admin() {
           </Box>
         </Container>
       ) : (
-        <Container sx={{ mt: { xs: 12, sm: 14, md: 16 }, color: "text.secondary" }}>
+        <Container sx={{ color: "text.secondary" }}>
           <Typography>Admin access required.</Typography>
         </Container>
       )}

@@ -4,11 +4,13 @@ import {
   Box,
   Button,
   Divider,
+  IconButton,
   Menu,
   MenuItem,
   Slide,
   Toolbar,
   Typography,
+  useMediaQuery,
   useScrollTrigger,
   useTheme,
 } from "@mui/material";
@@ -19,6 +21,7 @@ import { useThemeMode } from "../themeMode";
 export const Header = ({...props}) => {
     const location = useLocation();
     const theme = useTheme();
+    const isSmall = useMediaQuery(theme.breakpoints.down("md"));
     const { mode, setMode } = useThemeMode();
     const { status, user, signOut } = useAuth();
     const isSignedIn = status === "signedIn";
@@ -27,7 +30,10 @@ export const Header = ({...props}) => {
     const isLight = theme.palette.mode === "light";
     const [accountMenuPosition, setAccountMenuPosition] = React.useState<{ top: number; left: number } | null>(null);
     const isAccountOpen = Boolean(accountMenuPosition);
-    const accountLabel = isSignedIn ? (user?.username ?? "Account") : "Account";
+    const accountLabel = "Account";
+    const [navAnchor, setNavAnchor] = React.useState<null | HTMLElement>(null);
+    const isNavOpen = Boolean(navAnchor);
+    const headerHeight = { xs: 84, sm: 96, md: 112 };
 
     function HideOnScroll(props : {children: React.ReactElement, window?: () => Window}) {
         const { children, window } = props;
@@ -44,7 +50,7 @@ export const Header = ({...props}) => {
     <HideOnScroll {...props}>
     <AppBar 
       sx={{ 
-        minHeight: '10vh', 
+        minHeight: headerHeight,
         display: 'flex', 
         justifyContent: 'center',
         background: isLight
@@ -56,7 +62,7 @@ export const Header = ({...props}) => {
         color: theme.palette.text.primary,
       }}
     >
-      <Toolbar sx={{ minHeight: '10vh', py: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 2, sm: 4, md: 6 } }}>
+      <Toolbar sx={{ minHeight: headerHeight, py: { xs: 1, md: 2 }, display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: { xs: 2, sm: 4, md: 6 } }}>
         <Box
           component={Link}
           to="/"
@@ -102,145 +108,200 @@ export const Header = ({...props}) => {
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Button
-            color="inherit"
-            component={Link}
-            to="/about"
-            sx={{
-              fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
-              padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
-              textTransform: 'uppercase',
-              fontWeight: 600,
-              letterSpacing: '0.5px',
-              position: 'relative',
-              border: 'none',
-              background: isActive('/about') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              overflow: 'hidden',
-              borderRadius: '4px',
-              boxShadow: isActive('/about') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: '0',
-                left: '-100%',
-                width: '100%',
-                height: '100%',
-                background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
-                transition: 'left 0.3s ease',
-              },
-              '&:hover': {
-                backgroundColor: 'rgba(255, 179, 0, 0.2)',
-                boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
-                transform: 'translateY(-2px)',
-                '&::before': {
-                  left: '100%',
-                }
-              },
-              '&:active': {
-                transform: 'translateY(0)',
-              }
-            }}
-          >
-            About
-          </Button>
-
-          {isSignedIn && (
-            <Button
-              color="inherit"
-              component={Link}
-              to="/my-photos"
-              sx={{
-                fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
-                padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                letterSpacing: '0.5px',
-                position: 'relative',
-                border: 'none',
-                background: isActive('/my-photos') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                overflow: 'hidden',
-                borderRadius: '4px',
-                boxShadow: isActive('/my-photos') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: '0',
-                  left: '-100%',
-                  width: '100%',
-                  height: '100%',
-                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
-                  transition: 'left 0.3s ease',
-                },
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 179, 0, 0.2)',
-                  boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
-                  transform: 'translateY(-2px)',
+        <Box sx={{ display: 'flex', gap: { xs: 1, md: 2 }, alignItems: 'center' }}>
+          {isSmall ? (
+            <>
+              <IconButton
+                color="inherit"
+                onClick={(event) => setNavAnchor(event.currentTarget)}
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: "8px",
+                  background: isLight ? "rgba(15, 17, 20, 0.06)" : "rgba(255, 255, 255, 0.08)",
+                  "&:hover": {
+                    backgroundColor: isLight ? "rgba(15, 17, 20, 0.1)" : "rgba(255, 255, 255, 0.12)",
+                  },
+                }}
+              >
+                <Box component="span" sx={{ fontSize: "1.1rem", fontWeight: 700 }}>
+                  ≡
+                </Box>
+              </IconButton>
+              <Menu
+                anchorEl={navAnchor}
+                open={isNavOpen}
+                onClose={() => setNavAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                PaperProps={{
+                  sx: {
+                    mt: 1,
+                    minWidth: 200,
+                    borderRadius: 2,
+                    border: isLight ? "1px solid rgba(15, 17, 20, 0.08)" : "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: theme.palette.background.paper,
+                  },
+                }}
+              >
+                <MenuItem component={Link} to="/about" onClick={() => setNavAnchor(null)}>
+                  About
+                </MenuItem>
+                {isSignedIn && (
+                  <MenuItem component={Link} to="/my-photos" onClick={() => setNavAnchor(null)}>
+                    My Photos
+                  </MenuItem>
+                )}
+                {isAdmin && (
+                  <MenuItem component={Link} to="/admin" onClick={() => setNavAnchor(null)}>
+                    Admin
+                  </MenuItem>
+                )}
+              </Menu>
+            </>
+          ) : (
+            <>
+              <Button
+                color="inherit"
+                component={Link}
+                to="/about"
+                sx={{
+                  fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                  padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  position: 'relative',
+                  border: 'none',
+                  background: isActive('/about') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  overflow: 'hidden',
+                  borderRadius: '4px',
+                  boxShadow: isActive('/about') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
                   '&::before': {
-                    left: '100%',
+                    content: '""',
+                    position: 'absolute',
+                    top: '0',
+                    left: '-100%',
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                    transition: 'left 0.3s ease',
+                  },
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                    boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                    transform: 'translateY(-2px)',
+                    '&::before': {
+                      left: '100%',
+                    }
+                  },
+                  '&:active': {
+                    transform: 'translateY(0)',
                   }
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                }
-              }}
-            >
-              My Photos
-            </Button>
-          )}
+                }}
+              >
+                About
+              </Button>
 
-          {isAdmin && (
-            <Button
-              color="inherit"
-              component={Link}
-              to="/admin"
-              sx={{
-                fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
-                padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                letterSpacing: '0.5px',
-                position: 'relative',
-                border: 'none',
-                background: isActive('/admin') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                overflow: 'hidden',
-                borderRadius: '4px',
-                boxShadow: isActive('/admin') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: '0',
-                  left: '-100%',
-                  width: '100%',
-                  height: '100%',
-                  background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
-                  transition: 'left 0.3s ease',
-                },
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 179, 0, 0.2)',
-                  boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
-                  transform: 'translateY(-2px)',
-                  '&::before': {
-                    left: '100%',
-                  }
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                }
-              }}
-            >
-              Admin
-            </Button>
+              {isSignedIn && (
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/my-photos"
+                  sx={{
+                    fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                    padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    position: 'relative',
+                    border: 'none',
+                    whiteSpace: 'nowrap',
+                    background: isActive('/my-photos') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    overflow: 'hidden',
+                    borderRadius: '4px',
+                    boxShadow: isActive('/my-photos') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '0',
+                      left: '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                      transition: 'left 0.3s ease',
+                    },
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                      boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                      transform: 'translateY(-2px)',
+                      '&::before': {
+                        left: '100%',
+                      }
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                    }
+                  }}
+                >
+                  My Photos
+                </Button>
+              )}
+
+              {isAdmin && (
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/admin"
+                  sx={{
+                    fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                    padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    position: 'relative',
+                    border: 'none',
+                    background: isActive('/admin') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    overflow: 'hidden',
+                    borderRadius: '4px',
+                    boxShadow: isActive('/admin') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '0',
+                      left: '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                      transition: 'left 0.3s ease',
+                    },
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                      boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                      transform: 'translateY(-2px)',
+                      '&::before': {
+                        left: '100%',
+                      }
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                    }
+                  }}
+                >
+                  Admin
+                </Button>
+              )}
+            </>
           )}
 
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
-              pl: 2,
+              pl: { xs: 1, md: 2 },
               borderLeft: isLight ? "1px solid rgba(15, 17, 20, 0.12)" : "1px solid rgba(255, 255, 255, 0.15)",
             }}
           >
@@ -311,6 +372,31 @@ export const Header = ({...props}) => {
                 Dark mode
               </MenuItem>
               <Divider />
+              {isSignedIn && (
+                <>
+                  <Typography
+                    sx={{
+                      px: 2,
+                      pt: 1.5,
+                      pb: 1,
+                      fontSize: "0.75rem",
+                      letterSpacing: "0.8px",
+                      textTransform: "uppercase",
+                      color: theme.palette.text.secondary,
+                    }}
+                  >
+                    Navigation
+                  </Typography>
+                  <MenuItem
+                    component={Link}
+                    to="/my-photos"
+                    onClick={() => setAccountMenuPosition(null)}
+                  >
+                    My Photos
+                  </MenuItem>
+                  <Divider />
+                </>
+              )}
               {!isSignedIn ? (
                 <MenuItem component={Link} to="/login" onClick={() => setAccountMenuPosition(null)}>
                   Sign in
@@ -331,5 +417,5 @@ export const Header = ({...props}) => {
       </Toolbar>
     </AppBar>
   </HideOnScroll>
-  <Toolbar sx={{ minHeight: '10vh' }} /></>
+  <Toolbar sx={{ minHeight: headerHeight }} /></>
 }

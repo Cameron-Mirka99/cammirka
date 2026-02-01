@@ -69,7 +69,6 @@ function Home({ ...props }) {
           py: { xs: 6, sm: 8, md: 10 },
           textAlign: 'center',
           px: { xs: 2, sm: 3, md: 4 },
-          mt: { xs: 8, sm: 10, md: 12 },
           position: 'relative',
           zIndex: 1,
         }}
