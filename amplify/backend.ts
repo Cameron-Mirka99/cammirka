@@ -148,7 +148,7 @@ backend.acceptInvite.addEnvironment(
 );
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
-foldersTable.grantReadData(backend.createInvite.resources.lambda);
+foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
 foldersTable.grantReadData(backend.uploadImageFunction.resources.lambda);
 foldersTable.grantReadData(backend.listFolders.resources.lambda);
 foldersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
