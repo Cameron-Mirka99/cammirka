@@ -1,5 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 import crypto from "crypto";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
@@ -43,10 +48,15 @@ export const handler = async (
         ? Math.floor(body.expiresInDays)
         : 30;
     const expiresAt = Math.floor(Date.now() / 1000) + expiresInDays * 86400;
-    const inviteCode = crypto.randomBytes(16).toString("hex");
     const createdAt = new Date().toISOString();
     const createdBy =
       claims?.["cognito:username"] ?? claims?.username ?? "unknown";
+
+    const existingInviteCode =
+      typeof folderResult.Item.inviteCode === "string"
+        ? folderResult.Item.inviteCode
+        : undefined;
+    const inviteCode = existingInviteCode ?? crypto.randomBytes(16).toString("hex");
 
     await ddb.send(
       new PutCommand({
@@ -60,6 +70,19 @@ export const handler = async (
         },
       }),
     );
+
+    if (!existingInviteCode) {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: FOLDERS_TABLE_NAME,
+          Key: { folderId },
+          UpdateExpression: "SET inviteCode = :inviteCode",
+          ExpressionAttributeValues: {
+            ":inviteCode": inviteCode,
+          },
+        }),
+      );
+    }
 
     return response(201, { inviteCode, folderId, expiresAt });
   } catch (error) {

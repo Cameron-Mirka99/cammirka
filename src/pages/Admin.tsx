@@ -1,8 +1,9 @@
-import { Box, Button, Container, TextField, Typography, useTheme } from "@mui/material";
+import { Box, Button, Container, MenuItem, Paper, TextField, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { Header } from "../components/Header";
+import { Photo } from "../types/photo";
 import { photoApiBaseUrl } from "../utils/apiConfig";
 import { authFetch } from "../utils/authFetch";
 
@@ -12,12 +13,16 @@ export default function Admin() {
   const [displayName, setDisplayName] = useState("");
   const [inviteFolderId, setInviteFolderId] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [uploadFolderId, setUploadFolderId] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [moveSourceKey, setMoveSourceKey] = useState("");
-  const [moveDestination, setMoveDestination] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [folderItems, setFolderItems] = useState<Photo[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsError, setItemsError] = useState<string | null>(null);
+  const [itemsMoveTarget, setItemsMoveTarget] = useState("");
+  const [actionKey, setActionKey] = useState<string | null>(null);
   const [folders, setFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
     [],
   );
@@ -30,6 +35,16 @@ export default function Admin() {
   const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.08);
 
   const apiBase = photoApiBaseUrl;
+
+  const getFileName = (key: string) => key.split("/").pop() ?? key;
+
+  const buildDuplicateFileName = (key: string) => {
+    const fileName = getFileName(key);
+    const lastDotIndex = fileName.lastIndexOf(".");
+    const base = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
+    const ext = lastDotIndex > 0 ? fileName.slice(lastDotIndex) : "";
+    return `${base}-copy-${Date.now()}${ext}`;
+  };
 
   const loadFolders = async () => {
     if (!apiBase) return;
@@ -54,6 +69,45 @@ export default function Admin() {
     loadFolders().catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (!selectedFolder) {
+      setFolderItems([]);
+      setItemsMoveTarget("");
+      return;
+    }
+    const nextTarget = folders.find((folder) => folder.folderId !== selectedFolder)?.folderId ?? "";
+    setItemsMoveTarget(nextTarget);
+  }, [folders, selectedFolder]);
+
+  const loadFolderItems = async (folderId: string) => {
+    if (!apiBase) return;
+    setItemsLoading(true);
+    setItemsError(null);
+    try {
+      const res = await authFetch(`${apiBase}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId, limit: 1000 }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to load folder items: ${res.status}`);
+      }
+      const payload = await res.json();
+      const items: Photo[] = Array.isArray(payload.photos) ? payload.photos : [];
+      setFolderItems(items);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load items.";
+      setItemsError(message);
+    } finally {
+      setItemsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedFolder) return;
+    loadFolderItems(selectedFolder).catch(() => undefined);
+  }, [selectedFolder]);
+
   const createFolder = async () => {
     setStatusMessage(null);
     if (!apiBase) {
@@ -76,27 +130,41 @@ export default function Admin() {
     loadFolders().catch(() => undefined);
   };
 
-  const createInvite = async () => {
-    setStatusMessage(null);
+  const createInvite = async (folderOverride?: string, silent?: boolean) => {
     if (!apiBase) {
-      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      if (!silent) {
+        setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      }
       return;
     }
+    const targetFolder = folderOverride ?? inviteFolderId;
+    if (!targetFolder) return;
+
+    if (!silent) setStatusMessage(null);
+    setInviteLoading(true);
     const res = await authFetch(`${apiBase}/invites`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId: inviteFolderId }),
+      body: JSON.stringify({ folderId: targetFolder }),
     });
     const payload = await res.json();
     if (!res.ok) {
-      setStatusMessage(payload?.message ?? "Failed to create invite.");
+      if (!silent) {
+        setStatusMessage(payload?.message ?? "Failed to create invite.");
+      }
+      setInviteLoading(false);
       return;
     }
     const inviteCode = payload.inviteCode;
     const url = `${window.location.origin}/login?invite=${inviteCode}`;
     setInviteUrl(url);
-    setStatusMessage(`Invite created for ${payload.folderId}`);
-    setInviteFolderId("");
+    if (!silent) {
+      setStatusMessage(`Invite ready for ${payload.folderId}`);
+      if (!folderOverride) {
+        setInviteFolderId("");
+      }
+    }
+    setInviteLoading(false);
   };
 
   const uploadImage = async () => {
@@ -129,29 +197,6 @@ export default function Admin() {
     setUploadFile(null);
   };
 
-  const movePhoto = async () => {
-    setStatusMessage(null);
-    if (!apiBase) {
-      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
-      return;
-    }
-    const res = await authFetch(`${apiBase}/move-photo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sourceKey: moveSourceKey,
-        destinationFolderId: moveDestination,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setStatusMessage(payload?.message ?? "Move failed.");
-      return;
-    }
-    setStatusMessage(`Moved to ${payload.destinationKey}`);
-    setMoveSourceKey("");
-    setMoveDestination("");
-  };
 
   const deleteFolder = async (folderIdToDelete: string) => {
     setStatusMessage(null);
@@ -177,6 +222,99 @@ export default function Admin() {
     setStatusMessage(`Deleted folder ${payload.folderId}`);
     setSelectedFolder(null);
     loadFolders().catch(() => undefined);
+  };
+
+  const deletePhoto = async (key: string) => {
+    setStatusMessage(null);
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+    const confirmed = window.confirm(`Delete "${getFileName(key)}"? This cannot be undone.`);
+    if (!confirmed) return;
+    setActionKey(key);
+    const res = await authFetch(`${apiBase}/delete-photo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const payload = await res.json();
+    if (!res.ok) {
+      setStatusMessage(payload?.message ?? "Delete failed.");
+      setActionKey(null);
+      return;
+    }
+    setFolderItems((prev) => prev.filter((item) => item.key !== key));
+    setStatusMessage(`Deleted ${payload.deletedKey ?? key}`);
+    setActionKey(null);
+  };
+
+  const duplicatePhoto = async (key: string) => {
+    setStatusMessage(null);
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+    if (!selectedFolder) {
+      setStatusMessage("Select a folder to duplicate this photo.");
+      return;
+    }
+    setActionKey(key);
+    const destinationFileName = buildDuplicateFileName(key);
+    const res = await authFetch(`${apiBase}/duplicate-photo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceKey: key,
+        destinationFolderId: selectedFolder,
+        destinationFileName,
+      }),
+    });
+    const payload = await res.json();
+    if (!res.ok) {
+      setStatusMessage(payload?.message ?? "Duplicate failed.");
+      setActionKey(null);
+      return;
+    }
+    if (selectedFolder) {
+      loadFolderItems(selectedFolder).catch(() => undefined);
+    }
+    setStatusMessage(`Duplicated to ${payload.destinationKey ?? destinationFileName}`);
+    setActionKey(null);
+  };
+
+  const movePhotoFromList = async (key: string) => {
+    setStatusMessage(null);
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+    if (!itemsMoveTarget) {
+      setStatusMessage("Select a destination folder to move this item.");
+      return;
+    }
+    if (itemsMoveTarget === selectedFolder) {
+      setStatusMessage("Choose a different destination folder.");
+      return;
+    }
+    setActionKey(key);
+    const res = await authFetch(`${apiBase}/move-photo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceKey: key,
+        destinationFolderId: itemsMoveTarget,
+      }),
+    });
+    const payload = await res.json();
+    if (!res.ok) {
+      setStatusMessage(payload?.message ?? "Move failed.");
+      setActionKey(null);
+      return;
+    }
+    setFolderItems((prev) => prev.filter((item) => item.key !== key));
+    setStatusMessage(`Moved to ${payload.destinationKey ?? itemsMoveTarget}`);
+    setActionKey(null);
   };
 
   return (
@@ -232,7 +370,7 @@ export default function Admin() {
                         setSelectedFolder(folder.folderId);
                         setInviteFolderId(folder.folderId);
                         setUploadFolderId(folder.folderId);
-                        setMoveDestination(folder.folderId);
+                        createInvite(folder.folderId, true);
                         if (!folderId) {
                           setFolderId(folder.folderId);
                         }
@@ -302,6 +440,125 @@ export default function Admin() {
             <Box>
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" sx={{ mb: 1 }}>
+                Folder Items
+              </Typography>
+              <Typography sx={{ mb: 2, color: mutedText }}>
+                Select a folder on the left to view its contents.
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
+                <TextField
+                  label="Move destination"
+                  select
+                  value={itemsMoveTarget}
+                  onChange={(event) => setItemsMoveTarget(event.target.value)}
+                  sx={{ minWidth: 240 }}
+                  InputLabelProps={{ sx: { color: "text.secondary" } }}
+                  InputProps={{ sx: { color: "text.primary" } }}
+                  disabled={!selectedFolder || folders.length === 0}
+                >
+                  {folders.map((folder) => (
+                    <MenuItem
+                      key={folder.folderId}
+                      value={folder.folderId}
+                      disabled={folder.folderId === selectedFolder}
+                    >
+                      {folder.displayName ?? folder.folderId}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  onClick={() => selectedFolder && loadFolderItems(selectedFolder)}
+                  disabled={!selectedFolder || itemsLoading}
+                >
+                  Refresh
+                </Button>
+              </Box>
+
+              {!selectedFolder ? (
+                <Box sx={{ color: mutedText }}>Select a folder to view items.</Box>
+              ) : itemsLoading ? (
+                <Box sx={{ color: mutedText }}>Loading items...</Box>
+              ) : itemsError ? (
+                <Box sx={{ color: mutedText }}>{itemsError}</Box>
+              ) : folderItems.length === 0 ? (
+                <Box sx={{ color: mutedText }}>No items in this folder yet.</Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {folderItems.map((item) => (
+                    <Box
+                      key={item.key}
+                      sx={{
+                        display: "flex",
+                        flexDirection: { xs: "column", sm: "row" },
+                        gap: 2,
+                        alignItems: { xs: "flex-start", sm: "center" },
+                        padding: 2,
+                        borderRadius: 1,
+                        background: "rgba(255, 179, 0, 0.05)",
+                        border: "1px solid rgba(255, 179, 0, 0.2)",
+                        transition: "all 0.3s ease",
+                        "&:hover": {
+                          background: "rgba(255, 179, 0, 0.1)",
+                          borderColor: "rgba(255, 179, 0, 0.4)",
+                        },
+                      }}
+                    >
+                      <Box
+                        component="img"
+                        src={item.url}
+                        alt={getFileName(item.key)}
+                        sx={{
+                          width: 90,
+                          height: 60,
+                          objectFit: "cover",
+                          borderRadius: 1,
+                          border: "1px solid rgba(255, 179, 0, 0.2)",
+                        }}
+                      />
+                      <Box sx={{ flex: 1 }}>
+                        <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
+                          {getFileName(item.key)}
+                        </Box>
+                        <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                          {item.key}
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => duplicatePhoto(item.key)}
+                          disabled={actionKey === item.key}
+                        >
+                          Duplicate
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => movePhotoFromList(item.key)}
+                          disabled={actionKey === item.key || !itemsMoveTarget}
+                        >
+                          Move
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={() => deletePhoto(item.key)}
+                          disabled={actionKey === item.key}
+                        >
+                          Delete
+                        </Button>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
                 Create Folder
               </Typography>
               <Typography sx={{ mb: 2, color: mutedText }}>
@@ -347,14 +604,33 @@ export default function Admin() {
                     InputLabelProps={{ sx: { color: "text.secondary" } }}
                     InputProps={{ sx: { color: "text.primary" } }}
                   />
-                  <Button variant="contained" onClick={createInvite}>
+                  <Button variant="contained" onClick={() => createInvite()}>
                     Create Invite
                   </Button>
                 </Box>
-                {inviteUrl && (
+                {inviteLoading && (
                   <Box sx={{ mt: 2, color: mutedText }}>
-                    Invite URL: {inviteUrl}
+                    Preparing invite...
                   </Box>
+                )}
+                {inviteUrl && !inviteLoading && (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      mt: 2,
+                      p: 2,
+                      borderRadius: 2,
+                      background: "rgba(255, 179, 0, 0.05)",
+                      border: "1px solid rgba(255, 179, 0, 0.2)",
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ color: mutedText, mb: 1 }}>
+                      Invite URL
+                    </Typography>
+                    <Typography sx={{ color: "text.primary", wordBreak: "break-all" }}>
+                      {inviteUrl}
+                    </Typography>
+                  </Paper>
                 )}
               </Box>
 
@@ -396,36 +672,6 @@ export default function Admin() {
                 )}
               </Box>
 
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Move Photo
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                Example: move <strong>client-jones/IMG_1234.jpg</strong> to{" "}
-                <strong>client-smith</strong>
-              </Typography>
-              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                  <TextField
-                    label="Source key"
-                    value={moveSourceKey}
-                    onChange={(event) => setMoveSourceKey(event.target.value)}
-                    sx={{ minWidth: 280 }}
-                    InputLabelProps={{ sx: { color: "text.secondary" } }}
-                    InputProps={{ sx: { color: "text.primary" } }}
-                  />
-                  <TextField
-                    label="Destination folder"
-                    value={moveDestination}
-                    onChange={(event) => setMoveDestination(event.target.value)}
-                    sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "text.secondary" } }}
-                    InputProps={{ sx: { color: "text.primary" } }}
-                  />
-                  <Button variant="contained" onClick={movePhoto}>
-                    Move
-                  </Button>
-                </Box>
-              </Box>
             </Box>
           </Box>
         </Container>

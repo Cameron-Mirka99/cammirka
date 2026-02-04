@@ -21,6 +21,8 @@ import { acceptInvite } from "./functions/acceptInvite/resource.js";
 import { createFolder } from "./functions/createFolder/resource.js";
 import { createInvite } from "./functions/createInvite/resource.js";
 import { deleteFolder } from "./functions/deleteFolder/resource.js";
+import { deletePhoto } from "./functions/deletePhoto/resource.js";
+import { duplicatePhoto } from "./functions/duplicatePhoto/resource.js";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
@@ -33,6 +35,8 @@ const backend = defineBackend({
   createFolder,
   createInvite,
   deleteFolder,
+  deletePhoto,
+  duplicatePhoto,
   getPhotoList,
   listFolders,
   movePhoto,
@@ -77,6 +81,8 @@ photoBucket.grantRead(backend.getPhotoList.resources.lambda);
 photoBucket.grantReadWrite(backend.movePhoto.resources.lambda);
 photoBucket.grantRead(backend.publicPhotos.resources.lambda);
 photoBucket.grantReadWrite(backend.deleteFolder.resources.lambda);
+photoBucket.grantReadWrite(backend.deletePhoto.resources.lambda);
+photoBucket.grantReadWrite(backend.duplicatePhoto.resources.lambda);
 
 backend.uploadImageFunction.addEnvironment(
   "BUCKET_NAME",
@@ -105,6 +111,8 @@ backend.publicPhotos.addEnvironment(
 );
 
 backend.movePhoto.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
+backend.deletePhoto.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
+backend.duplicatePhoto.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 
 backend.createFolder.addEnvironment(
   "FOLDERS_TABLE_NAME",
@@ -239,6 +247,20 @@ acceptInviteResource.addMethod("POST", acceptInviteIntegration, {
 const movePhotoIntegration = new LambdaIntegration(backend.movePhoto.resources.lambda);
 const movePhotoResource = restApi.root.addResource("move-photo");
 movePhotoResource.addMethod("POST", movePhotoIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const deletePhotoIntegration = new LambdaIntegration(backend.deletePhoto.resources.lambda);
+const deletePhotoResource = restApi.root.addResource("delete-photo");
+deletePhotoResource.addMethod("POST", deletePhotoIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const duplicatePhotoIntegration = new LambdaIntegration(backend.duplicatePhoto.resources.lambda);
+const duplicatePhotoResource = restApi.root.addResource("duplicate-photo");
+duplicatePhotoResource.addMethod("POST", duplicatePhotoIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
