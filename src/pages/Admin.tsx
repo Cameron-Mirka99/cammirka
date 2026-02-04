@@ -255,8 +255,12 @@ export default function Admin() {
       setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
       return;
     }
-    if (!selectedFolder) {
-      setStatusMessage("Select a folder to duplicate this photo.");
+    if (!itemsMoveTarget) {
+      setStatusMessage("Select a destination folder to duplicate this photo.");
+      return;
+    }
+    if (itemsMoveTarget === selectedFolder) {
+      setStatusMessage("Choose a different destination folder.");
       return;
     }
     setActionKey(key);
@@ -266,7 +270,7 @@ export default function Admin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sourceKey: key,
-        destinationFolderId: selectedFolder,
+        destinationFolderId: itemsMoveTarget,
         destinationFileName,
       }),
     });
@@ -279,7 +283,7 @@ export default function Admin() {
     if (selectedFolder) {
       loadFolderItems(selectedFolder).catch(() => undefined);
     }
-    setStatusMessage(`Duplicated to ${payload.destinationKey ?? destinationFileName}`);
+    setStatusMessage(`Duplicated to ${payload.destinationKey ?? itemsMoveTarget}`);
     setActionKey(null);
   };
 
@@ -447,7 +451,7 @@ export default function Admin() {
               </Typography>
               <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
                 <TextField
-                  label="Move destination"
+                  label="Target folder (move/duplicate)"
                   select
                   value={itemsMoveTarget}
                   onChange={(event) => setItemsMoveTarget(event.target.value)}
@@ -485,10 +489,10 @@ export default function Admin() {
                 <Box sx={{ color: mutedText }}>No items in this folder yet.</Box>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  {folderItems.map((item) => (
-                    <Box
-                      key={item.key}
-                      sx={{
+                {folderItems.map((item) => (
+                  <Box
+                    key={item.key}
+                    sx={{
                         display: "flex",
                         flexDirection: { xs: "column", sm: "row" },
                         gap: 2,
@@ -523,6 +527,9 @@ export default function Admin() {
                         <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
                           {item.key}
                         </Box>
+                        <Box sx={{ fontSize: "0.7rem", color: mutedText, mt: 0.5 }}>
+                          Duplicate keeps the original and copies into the target folder.
+                        </Box>
                       </Box>
                       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                         <Button
@@ -531,7 +538,7 @@ export default function Admin() {
                           onClick={() => duplicatePhoto(item.key)}
                           disabled={actionKey === item.key}
                         >
-                          Duplicate
+                          Copy to folder
                         </Button>
                         <Button
                           size="small"
