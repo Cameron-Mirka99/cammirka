@@ -38,14 +38,6 @@ export default function Admin() {
 
   const getFileName = (key: string) => key.split("/").pop() ?? key;
 
-  const buildDuplicateFileName = (key: string) => {
-    const fileName = getFileName(key);
-    const lastDotIndex = fileName.lastIndexOf(".");
-    const base = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
-    const ext = lastDotIndex > 0 ? fileName.slice(lastDotIndex) : "";
-    return `${base}-copy-${Date.now()}${ext}`;
-  };
-
   const loadFolders = async () => {
     if (!apiBase) return;
     const res = await authFetch(`${apiBase}/folders`, {
@@ -264,14 +256,12 @@ export default function Admin() {
       return;
     }
     setActionKey(key);
-    const destinationFileName = buildDuplicateFileName(key);
     const res = await authFetch(`${apiBase}/duplicate-photo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sourceKey: key,
         destinationFolderId: itemsMoveTarget,
-        destinationFileName,
       }),
     });
     const payload = await res.json();

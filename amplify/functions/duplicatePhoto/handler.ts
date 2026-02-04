@@ -38,7 +38,7 @@ export const handler = async (
       return response(400, { message: "Invalid sourceKey." });
     }
 
-    const destinationFileName = body?.destinationFileName?.trim() || buildDuplicateFileName(fileName);
+    const destinationFileName = body?.destinationFileName?.trim() || fileName;
     const destinationKey = `${destinationFolderId}/${destinationFileName}`;
     const copySource = `${BUCKET_NAME}/${encodeKey(sourceKey)}`;
 
@@ -73,13 +73,6 @@ function sanitizeFolderId(value?: string) {
   if (!trimmed) return null;
   if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
   return trimmed;
-}
-
-function buildDuplicateFileName(fileName: string) {
-  const lastDotIndex = fileName.lastIndexOf(".");
-  const base = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
-  const ext = lastDotIndex > 0 ? fileName.slice(lastDotIndex) : "";
-  return `${base}-copy-${Date.now()}${ext}`;
 }
 
 function encodeKey(key: string) {
