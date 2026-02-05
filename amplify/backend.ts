@@ -25,6 +25,7 @@ import { deletePhoto } from "./functions/deletePhoto/resource.js";
 import { duplicatePhoto } from "./functions/duplicatePhoto/resource.js";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
+import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
@@ -39,6 +40,7 @@ const backend = defineBackend({
   duplicatePhoto,
   getPhotoList,
   listFolders,
+  listFolderUsers,
   movePhoto,
   publicPhotos,
   uploadImageFunction,
@@ -146,6 +148,10 @@ backend.acceptInvite.addEnvironment(
   "USER_POOL_ID",
   backend.auth.resources.userPool.userPoolId,
 );
+backend.listFolderUsers.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
 foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
@@ -161,6 +167,13 @@ backend.acceptInvite.resources.lambda.addToRolePolicy(
       "cognito-idp:AdminUpdateUserAttributes",
       "cognito-idp:AdminAddUserToGroup",
     ],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.listFolderUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:ListUsers"],
     resources: [backend.auth.resources.userPool.userPoolArn],
   }),
 );
@@ -233,6 +246,15 @@ foldersResource.addMethod("DELETE", deleteFolderIntegration, {
 const invitesIntegration = new LambdaIntegration(backend.createInvite.resources.lambda);
 const invitesResource = restApi.root.addResource("invites");
 invitesResource.addMethod("POST", invitesIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const listFolderUsersIntegration = new LambdaIntegration(
+  backend.listFolderUsers.resources.lambda,
+);
+const folderUsersResource = restApi.root.addResource("folder-users");
+folderUsersResource.addMethod("GET", listFolderUsersIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

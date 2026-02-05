@@ -7,6 +7,18 @@ import { Photo } from "../types/photo";
 import { photoApiBaseUrl } from "../utils/apiConfig";
 import { authFetch } from "../utils/authFetch";
 
+type FolderUser = {
+  username: string;
+  email?: string;
+  name?: string;
+  givenName?: string;
+  familyName?: string;
+  status?: string;
+  enabled?: boolean;
+  createdAt?: string;
+  lastModifiedAt?: string;
+};
+
 export default function Admin() {
   const { user } = useAuth();
   const [folderId, setFolderId] = useState("");
@@ -23,9 +35,14 @@ export default function Admin() {
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [itemsMoveTarget, setItemsMoveTarget] = useState("");
   const [actionKey, setActionKey] = useState<string | null>(null);
+  const [itemsPage, setItemsPage] = useState(1);
+  const [folderUsers, setFolderUsers] = useState<FolderUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [folders, setFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
     [],
   );
+  const itemsPerPage = 10;
 
   const theme = useTheme();
   const isAdmin = Boolean(user?.groups.includes("admin"));
@@ -37,6 +54,20 @@ export default function Admin() {
   const apiBase = photoApiBaseUrl;
 
   const getFileName = (key: string) => key.split("/").pop() ?? key;
+  const formatUserName = (userEntry: FolderUser) => {
+    if (userEntry.name) return userEntry.name;
+    const combined = [userEntry.givenName, userEntry.familyName]
+      .filter(Boolean)
+      .join(" ");
+    if (combined) return combined;
+    return userEntry.email ?? userEntry.username;
+  };
+  const formatDate = (value?: string) => {
+    if (!value) return "Unknown";
+    const date = new Date(value);
+    if (Number.isNaN(date.valueOf())) return value;
+    return date.toLocaleString();
+  };
 
   const loadFolders = async () => {
     if (!apiBase) return;
@@ -65,10 +96,12 @@ export default function Admin() {
     if (!selectedFolder) {
       setFolderItems([]);
       setItemsMoveTarget("");
+      setItemsPage(1);
       return;
     }
     const nextTarget = folders.find((folder) => folder.folderId !== selectedFolder)?.folderId ?? "";
     setItemsMoveTarget(nextTarget);
+    setItemsPage(1);
   }, [folders, selectedFolder]);
 
   const loadFolderItems = async (folderId: string) => {
@@ -87,6 +120,7 @@ export default function Admin() {
       const payload = await res.json();
       const items: Photo[] = Array.isArray(payload.photos) ? payload.photos : [];
       setFolderItems(items);
+      setItemsPage(1);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load items.";
       setItemsError(message);
@@ -95,9 +129,40 @@ export default function Admin() {
     }
   };
 
+  const loadFolderUsers = async (folderId: string) => {
+    if (!apiBase) return;
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const res = await authFetch(
+        `${apiBase}/folder-users?folderId=${encodeURIComponent(folderId)}`,
+        { method: "GET" },
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to load users: ${res.status}`);
+      }
+      const payload = await res.json();
+      const users: FolderUser[] = Array.isArray(payload.users) ? payload.users : [];
+      setFolderUsers(users);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load users.";
+      setUsersError(message);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!selectedFolder) return;
     loadFolderItems(selectedFolder).catch(() => undefined);
+  }, [selectedFolder]);
+
+  useEffect(() => {
+    if (!selectedFolder) {
+      setFolderUsers([]);
+      return;
+    }
+    loadFolderUsers(selectedFolder).catch(() => undefined);
   }, [selectedFolder]);
 
   const createFolder = async () => {
@@ -479,7 +544,12 @@ export default function Admin() {
                 <Box sx={{ color: mutedText }}>No items in this folder yet.</Box>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                {folderItems.map((item) => (
+                {folderItems
+                  .slice(
+                    (itemsPage - 1) * itemsPerPage,
+                    itemsPage * itemsPerPage,
+                  )
+                  .map((item) => (
                   <Box
                     key={item.key}
                     sx={{
@@ -547,6 +617,106 @@ export default function Admin() {
                         >
                           Delete
                         </Button>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              {selectedFolder && folderItems.length > itemsPerPage && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    mt: 2,
+                    gap: 2,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography sx={{ color: mutedText, fontSize: "0.85rem" }}>
+                    Showing {(itemsPage - 1) * itemsPerPage + 1}-
+                    {Math.min(itemsPage * itemsPerPage, folderItems.length)} of{" "}
+                    {folderItems.length}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setItemsPage((page) => Math.max(1, page - 1))}
+                      disabled={itemsPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        setItemsPage((page) =>
+                          Math.min(page + 1, Math.ceil(folderItems.length / itemsPerPage)),
+                        )
+                      }
+                      disabled={itemsPage >= Math.ceil(folderItems.length / itemsPerPage)}
+                    >
+                      Next
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Folder Users
+              </Typography>
+              <Typography sx={{ mb: 2, color: mutedText }}>
+                {selectedFolder
+                  ? `Users assigned to ${selectedFolder}.`
+                  : "Select a folder to view users."}
+              </Typography>
+              {!selectedFolder ? (
+                <Box sx={{ color: mutedText }}>Select a folder to view users.</Box>
+              ) : usersLoading ? (
+                <Box sx={{ color: mutedText }}>Loading users...</Box>
+              ) : usersError ? (
+                <Box sx={{ color: mutedText }}>{usersError}</Box>
+              ) : folderUsers.length === 0 ? (
+                <Box sx={{ color: mutedText }}>No users assigned to this folder.</Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {folderUsers.map((userEntry) => (
+                    <Box
+                      key={userEntry.username}
+                      sx={{
+                        display: "flex",
+                        flexDirection: { xs: "column", sm: "row" },
+                        gap: 2,
+                        alignItems: { xs: "flex-start", sm: "center" },
+                        padding: 2,
+                        borderRadius: 1,
+                        background: "rgba(0, 217, 255, 0.05)",
+                        border: "1px solid rgba(0, 217, 255, 0.2)",
+                      }}
+                    >
+                      <Box sx={{ flex: 1 }}>
+                        <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
+                          {formatUserName(userEntry)}
+                        </Box>
+                        <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                          Username: {userEntry.username}
+                        </Box>
+                        {userEntry.email && (
+                          <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                            Email: {userEntry.email}
+                          </Box>
+                        )}
+                      </Box>
+                      <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                        <Box>
+                          Status: {userEntry.status ?? "UNKNOWN"} ·{" "}
+                          {userEntry.enabled === false ? "Disabled" : "Enabled"}
+                        </Box>
+                        <Box>Created: {formatDate(userEntry.createdAt)}</Box>
+                        <Box>Last updated: {formatDate(userEntry.lastModifiedAt)}</Box>
                       </Box>
                     </Box>
                   ))}
