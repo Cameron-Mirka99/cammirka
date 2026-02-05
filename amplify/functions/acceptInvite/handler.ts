@@ -21,15 +21,11 @@ export const handler = async (
     const claims = getClaims(event);
     const username =
       claims?.["cognito:username"] ?? claims?.username ?? claims?.sub;
-    const currentFolder = claims?.["custom:folderId"];
 
     if (!username) {
       return response(401, { message: "Unauthorized." });
     }
 
-    if (currentFolder) {
-      return response(409, { message: "Folder already assigned." });
-    }
 
     const body = parseBody(event);
     const inviteCode = body?.inviteCode?.trim();
@@ -61,18 +57,21 @@ export const handler = async (
       return response(410, { message: "Invite has expired." });
     }
 
-    await cognito.send(
-      new AdminUpdateUserAttributesCommand({
-        UserPoolId: USER_POOL_ID,
-        Username: username,
-        UserAttributes: [
-          {
-            Name: "custom:folderId",
-            Value: folderId,
-          },
-        ],
-      }),
-    );
+    const currentFolder = claims?.["custom:folderId"];
+    if (!currentFolder) {
+      await cognito.send(
+        new AdminUpdateUserAttributesCommand({
+          UserPoolId: USER_POOL_ID,
+          Username: username,
+          UserAttributes: [
+            {
+              Name: "custom:folderId",
+              Value: folderId,
+            },
+          ],
+        }),
+      );
+    }
 
     await cognito.send(
       new AdminAddUserToGroupCommand({

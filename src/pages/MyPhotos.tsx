@@ -26,6 +26,10 @@ export default function MyPhotos() {
   const [folders, setFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
     [],
   );
+  const [userFolders, setUserFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
+    [],
+  );
+  const [userFoldersLoading, setUserFoldersLoading] = useState(false);
 
   let columnsCount = 1;
   if (isLg) {
@@ -48,13 +52,44 @@ export default function MyPhotos() {
     const payload = await res.json();
     const items = Array.isArray(payload.folders) ? payload.folders : [];
     setFolders(items);
-  }, [isAdmin]);
+  }, [isAdmin, photoApiBaseUrl]);
 
   useEffect(() => {
     if (isAdmin) {
       loadFolders().catch(() => undefined);
     }
   }, [isAdmin, loadFolders]);
+
+  const loadUserFolders = useCallback(async () => {
+    if (!photoApiBaseUrl || isAdmin) return;
+    setUserFoldersLoading(true);
+    try {
+      const res = await authFetch(`${photoApiBaseUrl}/user-folders`, {
+        method: "GET",
+      });
+      if (!res.ok) return;
+      const payload = await res.json();
+      const items = Array.isArray(payload.folders) ? payload.folders : [];
+      setUserFolders(items);
+    } finally {
+      setUserFoldersLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin && status === "signedIn") {
+      loadUserFolders().catch(() => undefined);
+    }
+  }, [isAdmin, status, loadUserFolders]);
+
+  useEffect(() => {
+    const selectable = isAdmin ? folders : userFolders;
+    if (selectable.length === 0) return;
+    if (activeFolderId && selectable.some((folder) => folder.folderId === activeFolderId)) {
+      return;
+    }
+    setActiveFolderId(selectable[0].folderId);
+  }, [isAdmin, folders, userFolders, activeFolderId]);
 
   const fetchPhotos = useCallback(
     async (excludeKeys: string[] = [], limit = 200) => {
@@ -63,7 +98,7 @@ export default function MyPhotos() {
       }
 
       const body: Record<string, unknown> = { excludeKeys, limit };
-      if (isAdmin && activeFolderId) {
+      if (activeFolderId) {
         body.folderId = activeFolderId;
       }
 
@@ -86,16 +121,17 @@ export default function MyPhotos() {
         return [...prev, ...filtered];
       });
     },
-    [activeFolderId, isAdmin],
+    [activeFolderId],
   );
 
   useEffect(() => {
     if (status !== "signedIn") return;
-    if (!user?.folderId && !isAdmin) {
+    const selectable = isAdmin ? folders : userFolders;
+    if (!isAdmin && selectable.length === 0 && !userFoldersLoading) {
       setLoading(false);
       return;
     }
-    if (isAdmin && !activeFolderId) {
+    if (!activeFolderId) {
       setLoading(false);
       return;
     }
@@ -129,7 +165,7 @@ export default function MyPhotos() {
     );
   }
 
-  if (!user?.folderId && !isAdmin) {
+  if (!isAdmin && userFolders.length === 0 && !userFoldersLoading) {
     return (
       <>
         <Header />
@@ -193,7 +229,7 @@ export default function MyPhotos() {
           </Button>
         </Box>
 
-        {isAdmin ? (
+        {isAdmin || userFolders.length > 1 ? (
           <Box
             sx={{
               display: "grid",
@@ -214,11 +250,11 @@ export default function MyPhotos() {
               <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>
                 Choose a folder
               </Typography>
-              {folders.length === 0 ? (
+              {(isAdmin ? folders : userFolders).length === 0 ? (
                 <Box sx={{ color: mutedText }}>No folders yet.</Box>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {folders.map((folder) => (
+                  {(isAdmin ? folders : userFolders).map((folder) => (
                     <Box
                       key={folder.folderId}
                       onClick={() => setActiveFolderId(folder.folderId)}
@@ -250,6 +286,7 @@ export default function MyPhotos() {
             <Box>
               {activeFolderId ? (
                 <MainImageDisplay
+                  key={activeFolderId}
                   photos={photos}
                   columnsCount={columnsCount}
                   loading={loading}
@@ -262,11 +299,20 @@ export default function MyPhotos() {
             </Box>
           </Box>
         ) : (
-          <MainImageDisplay
-            photos={photos}
-            columnsCount={columnsCount}
-            loading={loading}
-          />
+          <>
+            {activeFolderId ? (
+              <MainImageDisplay
+                key={activeFolderId}
+                photos={photos}
+                columnsCount={columnsCount}
+                loading={loading}
+              />
+            ) : (
+              <Box sx={{ color: mutedText, mt: 2 }}>
+                Select a folder to view its gallery.
+              </Box>
+            )}
+          </>
         )}
       </Container>
     </>

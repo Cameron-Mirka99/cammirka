@@ -25,6 +25,7 @@ import { deleteFolder } from "./functions/deleteFolder/resource.js";
 import { deletePhoto } from "./functions/deletePhoto/resource.js";
 import { duplicatePhoto } from "./functions/duplicatePhoto/resource.js";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
+import { listUserFolders } from "./functions/listUserFolders/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
 import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
@@ -41,6 +42,7 @@ const backend = defineBackend({
   deletePhoto,
   duplicatePhoto,
   getPhotoList,
+  listUserFolders,
   listFolders,
   listFolderUsers,
   movePhoto,
@@ -66,6 +68,13 @@ const folderUsersTable = new Table(infraStack, "FolderUsersTable", {
   partitionKey: { name: "folderId", type: AttributeType.STRING },
   sortKey: { name: "username", type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
+});
+
+folderUsersTable.addGlobalSecondaryIndex({
+  indexName: "byUsername",
+  partitionKey: { name: "username", type: AttributeType.STRING },
+  sortKey: { name: "folderId", type: AttributeType.STRING },
+  projectionType: "ALL",
 });
 
 const photoBucket = Bucket.fromBucketName(
@@ -176,6 +185,14 @@ backend.listFolderUsers.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
 );
+backend.listUserFolders.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
+backend.listUserFolders.addEnvironment(
+  "FOLDERS_TABLE_NAME",
+  foldersTable.tableName,
+);
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
 foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
@@ -187,6 +204,8 @@ invitesTable.grantReadData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.backfillFolderUsers.resources.lambda);
+folderUsersTable.grantReadData(backend.listUserFolders.resources.lambda);
+foldersTable.grantReadData(backend.listUserFolders.resources.lambda);
 
 backend.acceptInvite.resources.lambda.addToRolePolicy(
   new PolicyStatement({
@@ -289,6 +308,15 @@ const listFolderUsersIntegration = new LambdaIntegration(
 );
 const folderUsersResource = restApi.root.addResource("folder-users");
 folderUsersResource.addMethod("GET", listFolderUsersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const listUserFoldersIntegration = new LambdaIntegration(
+  backend.listUserFolders.resources.lambda,
+);
+const userFoldersResource = restApi.root.addResource("user-folders");
+userFoldersResource.addMethod("GET", listUserFoldersIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
