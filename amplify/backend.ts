@@ -12,6 +12,7 @@ import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
 import {
   AttributeType,
   BillingMode,
+  ProjectionType,
   Table,
 } from "aws-cdk-lib/aws-dynamodb";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
@@ -74,7 +75,7 @@ folderUsersTable.addGlobalSecondaryIndex({
   indexName: "byUsername",
   partitionKey: { name: "username", type: AttributeType.STRING },
   sortKey: { name: "folderId", type: AttributeType.STRING },
-  projectionType: "ALL",
+  projectionType: ProjectionType.ALL,
 });
 
 const photoBucket = Bucket.fromBucketName(
