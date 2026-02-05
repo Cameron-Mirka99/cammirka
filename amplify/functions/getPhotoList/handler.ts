@@ -1,9 +1,13 @@
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const BUCKET = process.env.BUCKET_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
+const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
 const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 const DEFAULT_LIMIT = Number.parseInt(process.env.DEFAULT_LIMIT ?? "200", 10);
 
@@ -72,11 +76,29 @@ export const handler = async (
       }
     }
 
-    const folderId = resolveFolderId({
-      claims,
-      requestedFolderId,
-      isAdminUser,
-    });
+    const username =
+      claims["cognito:username"] ?? claims.username ?? claims.sub;
+
+    let folderId: string | null = null;
+    if (isAdminUser && requestedFolderId) {
+      folderId = sanitizeFolderId(requestedFolderId);
+    } else if (!isAdminUser && requestedFolderId) {
+      if (!FOLDER_USERS_TABLE_NAME) {
+        return response(500, { message: "FOLDER_USERS_TABLE_NAME is not configured." });
+      }
+      if (!username) {
+        return response(401, { message: "Unauthorized." });
+      }
+      const allowed = await isUserInFolder(username, requestedFolderId);
+      if (!allowed) {
+        return response(403, { message: "Folder access not available." });
+      }
+      folderId = sanitizeFolderId(requestedFolderId);
+    }
+
+    if (!folderId) {
+      folderId = sanitizeFolderId(claims["custom:folderId"]);
+    }
 
     if (!folderId) {
       return response(403, { message: "Folder access not available." });
@@ -171,27 +193,21 @@ function isAdmin(claims: Record<string, string>) {
   return typeof groups === "string" && groups.includes("admin");
 }
 
-function resolveFolderId({
-  claims,
-  requestedFolderId,
-  isAdminUser,
-}: {
-  claims: Record<string, string>;
-  requestedFolderId?: string;
-  isAdminUser: boolean;
-}) {
-  if (isAdminUser && requestedFolderId) {
-    return sanitizeFolderId(requestedFolderId);
-  }
-
-  const folderId = claims["custom:folderId"];
-  return sanitizeFolderId(folderId);
-}
-
 function sanitizeFolderId(value?: string) {
   if (!value) return null;
   const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
   if (!trimmed) return null;
   if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
   return trimmed;
+}
+
+async function isUserInFolder(username: string, folderId: string) {
+  const result = await ddb.send(
+    new GetCommand({
+      TableName: FOLDER_USERS_TABLE_NAME,
+      Key: { folderId, username },
+    }),
+  );
+
+  return Boolean(result.Item);
 }

@@ -31,6 +31,7 @@ import { listFolders } from "./functions/listFolders/resource.js";
 import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
+import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
 const backend = defineBackend({
@@ -48,6 +49,7 @@ const backend = defineBackend({
   listFolderUsers,
   movePhoto,
   publicPhotos,
+  removeFolderUser,
   uploadImageFunction,
 });
 
@@ -119,6 +121,10 @@ backend.getPhotoList.addEnvironment(
 backend.getPhotoList.addEnvironment(
   "CLOUDFRONT_DOMAIN",
   distribution.domainName,
+);
+backend.getPhotoList.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
 );
 
 backend.publicPhotos.addEnvironment(
@@ -194,6 +200,10 @@ backend.listUserFolders.addEnvironment(
   "FOLDERS_TABLE_NAME",
   foldersTable.tableName,
 );
+backend.removeFolderUser.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
 foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
@@ -206,6 +216,8 @@ folderUsersTable.grantReadWriteData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.backfillFolderUsers.resources.lambda);
 folderUsersTable.grantReadData(backend.listUserFolders.resources.lambda);
+folderUsersTable.grantReadData(backend.getPhotoList.resources.lambda);
+folderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lambda);
 foldersTable.grantReadData(backend.listUserFolders.resources.lambda);
 
 backend.acceptInvite.resources.lambda.addToRolePolicy(
@@ -318,6 +330,15 @@ const listUserFoldersIntegration = new LambdaIntegration(
 );
 const userFoldersResource = restApi.root.addResource("user-folders");
 userFoldersResource.addMethod("GET", listUserFoldersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const removeFolderUserIntegration = new LambdaIntegration(
+  backend.removeFolderUser.resources.lambda,
+);
+const removeFolderUserResource = restApi.root.addResource("folder-users-remove");
+removeFolderUserResource.addMethod("POST", removeFolderUserIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

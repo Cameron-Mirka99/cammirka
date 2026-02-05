@@ -41,6 +41,7 @@ export default function Admin() {
   const [usersError, setUsersError] = useState<string | null>(null);
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
+  const [userActionKey, setUserActionKey] = useState<string | null>(null);
   const [folders, setFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
     [],
   );
@@ -177,6 +178,32 @@ export default function Admin() {
       setBackfillMessage(message);
     } finally {
       setBackfillLoading(false);
+    }
+  };
+
+  const removeFolderUser = async (username: string) => {
+    if (!apiBase || !selectedFolder) return;
+    const confirmed = window.confirm(
+      `Remove ${username} from ${selectedFolder}? They will no longer have access to this folder.`,
+    );
+    if (!confirmed) return;
+    setUserActionKey(username);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-remove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: selectedFolder, username }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Remove failed.");
+      }
+      setFolderUsers((prev) => prev.filter((entry) => entry.username !== username));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Remove failed.";
+      setUsersError(message);
+    } finally {
+      setUserActionKey(null);
     }
   };
 
@@ -738,13 +765,31 @@ export default function Admin() {
                           </Box>
                         )}
                       </Box>
-                      <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                      <Box
+                        sx={{
+                          fontSize: "0.75rem",
+                          color: mutedText,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                          alignItems: { xs: "flex-start", sm: "flex-end" },
+                        }}
+                      >
                         <Box>
                           Status: {userEntry.status ?? "UNKNOWN"} ·{" "}
                           {userEntry.enabled === false ? "Disabled" : "Enabled"}
                         </Box>
                         <Box>Created: {formatDate(userEntry.createdAt)}</Box>
                         <Box>Last updated: {formatDate(userEntry.lastModifiedAt)}</Box>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={() => removeFolderUser(userEntry.username)}
+                          disabled={userActionKey === userEntry.username}
+                        >
+                          Remove from folder
+                        </Button>
                       </Box>
                     </Box>
                   ))}
