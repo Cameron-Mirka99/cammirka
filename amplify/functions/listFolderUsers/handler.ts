@@ -1,20 +1,22 @@
 import {
+  AdminGetUserCommand,
   CognitoIdentityProviderClient,
-  ListUsersCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
+const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
 
 const cognito = new CognitoIdentityProviderClient({});
-
-type CognitoAttribute = { Name?: string; Value?: string };
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!USER_POOL_ID) {
+    if (!USER_POOL_ID || !FOLDER_USERS_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -41,49 +43,74 @@ export const handler = async (
 };
 
 async function fetchUsersForFolder(folderId: string) {
-  const users: Array<{
-    username: string;
-    enabled?: boolean;
-    status?: string;
-    createdAt?: string;
-    lastModifiedAt?: string;
-    email?: string;
-    name?: string;
-    givenName?: string;
-    familyName?: string;
-  }> = [];
+  const mappedUsers = await queryFolderUsers(folderId);
+  if (mappedUsers.length === 0) {
+    return [];
+  }
 
-  let paginationToken: string | undefined;
-  do {
+  const users = await Promise.all(
+    mappedUsers.map((entry) => fetchUser(entry.username)),
+  );
+
+  return users.filter((userEntry): userEntry is NonNullable<typeof userEntry> => Boolean(userEntry));
+}
+
+async function fetchUser(username: string) {
+  try {
     const result = await cognito.send(
-      new ListUsersCommand({
+      new AdminGetUserCommand({
         UserPoolId: USER_POOL_ID,
-        Filter: `custom:folderId = "${folderId}"`,
-        Limit: 60,
-        PaginationToken: paginationToken,
+        Username: username,
       }),
     );
 
-    for (const user of result.Users ?? []) {
-      const attrs = user.Attributes ?? [];
-      users.push({
-        username: user.Username ?? "",
-        enabled: user.Enabled,
-        status: user.UserStatus,
-        createdAt: user.UserCreateDate?.toISOString(),
-        lastModifiedAt: user.UserLastModifiedDate?.toISOString(),
-        email: getAttribute(attrs, "email"),
-        name: getAttribute(attrs, "name"),
-        givenName: getAttribute(attrs, "given_name"),
-        familyName: getAttribute(attrs, "family_name"),
-      });
-    }
-
-    paginationToken = result.PaginationToken;
-  } while (paginationToken);
-
-  return users;
+    const attrs = result.UserAttributes ?? [];
+    return {
+      username,
+      enabled: result.Enabled,
+      status: result.UserStatus,
+      createdAt: result.UserCreateDate?.toISOString(),
+      lastModifiedAt: result.UserLastModifiedDate?.toISOString(),
+      email: getAttribute(attrs, "email"),
+      name: getAttribute(attrs, "name"),
+      givenName: getAttribute(attrs, "given_name"),
+      familyName: getAttribute(attrs, "family_name"),
+    };
+  } catch (error) {
+    console.error(`Failed to fetch user ${username}`, error);
+    return null;
+  }
 }
+
+async function queryFolderUsers(folderId: string) {
+  const entries: Array<{ username: string; createdAt?: string }> = [];
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  do {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: FOLDER_USERS_TABLE_NAME,
+        KeyConditionExpression: "folderId = :folderId",
+        ExpressionAttributeValues: {
+          ":folderId": folderId,
+        },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    for (const item of result.Items ?? []) {
+      if (typeof item.username === "string") {
+        entries.push({
+          username: item.username,
+          createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
+        });
+      }
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastEvaluatedKey);
+
+  return entries;
+}
+
+type CognitoAttribute = { Name?: string; Value?: string };
 
 function getAttribute(attrs: CognitoAttribute[], name: string) {
   return attrs.find((attr) => attr.Name === name)?.Value;

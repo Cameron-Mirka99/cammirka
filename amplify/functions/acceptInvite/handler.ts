@@ -1,10 +1,11 @@
 import { CognitoIdentityProviderClient, AdminAddUserToGroupCommand, AdminUpdateUserAttributesCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const INVITES_TABLE_NAME = process.env.INVITES_TABLE_NAME;
 const USER_POOL_ID = process.env.USER_POOL_ID;
+const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
@@ -13,7 +14,7 @@ export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!INVITES_TABLE_NAME || !USER_POOL_ID) {
+    if (!INVITES_TABLE_NAME || !USER_POOL_ID || !FOLDER_USERS_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -78,6 +79,17 @@ export const handler = async (
         UserPoolId: USER_POOL_ID,
         Username: username,
         GroupName: "user",
+      }),
+    );
+
+    await ddb.send(
+      new PutCommand({
+        TableName: FOLDER_USERS_TABLE_NAME,
+        Item: {
+          folderId,
+          username,
+          createdAt: new Date().toISOString(),
+        },
       }),
     );
 

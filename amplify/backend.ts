@@ -18,6 +18,7 @@ import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
+import { backfillFolderUsers } from "./functions/backfillFolderUsers/resource.js";
 import { createFolder } from "./functions/createFolder/resource.js";
 import { createInvite } from "./functions/createInvite/resource.js";
 import { deleteFolder } from "./functions/deleteFolder/resource.js";
@@ -33,6 +34,7 @@ import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js
 const backend = defineBackend({
   auth,
   acceptInvite,
+  backfillFolderUsers,
   createFolder,
   createInvite,
   deleteFolder,
@@ -58,6 +60,12 @@ const invitesTable = new Table(infraStack, "InvitesTable", {
   partitionKey: { name: "inviteCode", type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
   timeToLiveAttribute: "expiresAt",
+});
+
+const folderUsersTable = new Table(infraStack, "FolderUsersTable", {
+  partitionKey: { name: "folderId", type: AttributeType.STRING },
+  sortKey: { name: "username", type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
 });
 
 const photoBucket = Bucket.fromBucketName(
@@ -148,9 +156,25 @@ backend.acceptInvite.addEnvironment(
   "USER_POOL_ID",
   backend.auth.resources.userPool.userPoolId,
 );
+backend.acceptInvite.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
+backend.backfillFolderUsers.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
+backend.backfillFolderUsers.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
 backend.listFolderUsers.addEnvironment(
   "USER_POOL_ID",
   backend.auth.resources.userPool.userPoolId,
+);
+backend.listFolderUsers.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
 );
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
@@ -160,6 +184,9 @@ foldersTable.grantReadData(backend.listFolders.resources.lambda);
 foldersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
 invitesTable.grantReadWriteData(backend.createInvite.resources.lambda);
 invitesTable.grantReadData(backend.acceptInvite.resources.lambda);
+folderUsersTable.grantReadWriteData(backend.acceptInvite.resources.lambda);
+folderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
+folderUsersTable.grantReadWriteData(backend.backfillFolderUsers.resources.lambda);
 
 backend.acceptInvite.resources.lambda.addToRolePolicy(
   new PolicyStatement({
@@ -172,6 +199,13 @@ backend.acceptInvite.resources.lambda.addToRolePolicy(
 );
 
 backend.listFolderUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:AdminGetUser"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.backfillFolderUsers.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ["cognito-idp:ListUsers"],
     resources: [backend.auth.resources.userPool.userPoolArn],
@@ -255,6 +289,15 @@ const listFolderUsersIntegration = new LambdaIntegration(
 );
 const folderUsersResource = restApi.root.addResource("folder-users");
 folderUsersResource.addMethod("GET", listFolderUsersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const backfillFolderUsersIntegration = new LambdaIntegration(
+  backend.backfillFolderUsers.resources.lambda,
+);
+const backfillFolderUsersResource = restApi.root.addResource("folder-users-backfill");
+backfillFolderUsersResource.addMethod("POST", backfillFolderUsersIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

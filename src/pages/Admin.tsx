@@ -1,4 +1,4 @@
-import { Box, Button, Container, MenuItem, Paper, TextField, Typography, useTheme } from "@mui/material";
+import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Container, MenuItem, Paper, TextField, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
@@ -39,6 +39,8 @@ export default function Admin() {
   const [folderUsers, setFolderUsers] = useState<FolderUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [folders, setFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
     [],
   );
@@ -149,6 +151,32 @@ export default function Admin() {
       setUsersError(message);
     } finally {
       setUsersLoading(false);
+    }
+  };
+
+  const backfillFolderUsers = async () => {
+    if (!apiBase) return;
+    setBackfillMessage(null);
+    setBackfillLoading(true);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-backfill`, {
+        method: "POST",
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Backfill failed.");
+      }
+      const scanned = payload?.scanned ?? 0;
+      const updated = payload?.updated ?? 0;
+      setBackfillMessage(`Backfill complete. Scanned ${scanned}, updated ${updated}.`);
+      if (selectedFolder) {
+        loadFolderUsers(selectedFolder).catch(() => undefined);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to backfill.";
+      setBackfillMessage(message);
+    } finally {
+      setBackfillLoading(false);
     }
   };
 
@@ -841,6 +869,39 @@ export default function Admin() {
 
             </Box>
           </Box>
+          <Accordion
+            defaultExpanded={false}
+            sx={{
+              mt: 4,
+              mb: 4,
+              border: `1px solid ${subtleBorder}`,
+              borderRadius: 2,
+              background: cardBg,
+              "&:before": { display: "none" },
+            }}
+          >
+            <AccordionSummary
+              sx={{ paddingX: 2, paddingY: 1 }}
+              expandIcon={<span style={{ fontSize: "1.2rem", color: mutedText }}>+</span>}
+            >
+              <Typography variant="h6">Advanced</Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ paddingX: 2, paddingBottom: 2 }}>
+              <Typography sx={{ mb: 2, color: mutedText }}>
+                Backfill folder-user mappings from the current user pool.
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={backfillFolderUsers}
+                disabled={backfillLoading}
+              >
+                {backfillLoading ? "Backfilling..." : "Backfill Folder Users"}
+              </Button>
+              {backfillMessage && (
+                <Box sx={{ mt: 2, color: mutedText }}>{backfillMessage}</Box>
+              )}
+            </AccordionDetails>
+          </Accordion>
         </Container>
       ) : (
         <Container sx={{ color: "text.secondary" }}>
