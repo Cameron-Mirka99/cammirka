@@ -1,18 +1,16 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
-const s3 = new S3Client({ region: process.env.AWS_REGION });
-const BUCKET_NAME = process.env.BUCKET_NAME;
-const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
+const BANNED_USERS_TABLE_NAME = process.env.BANNED_USERS_TABLE_NAME;
+
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!BUCKET_NAME || !FOLDERS_TABLE_NAME) {
+    if (!BANNED_USERS_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -22,52 +20,25 @@ export const handler = async (
     }
 
     const body = parseBody(event);
-    const image = body?.image;
-    const imageName = body?.imageName;
     const folderId = sanitizeFolderId(body?.folderId);
+    const username = typeof body?.username === "string" ? body.username.trim() : "";
 
-    if (!image || !imageName || !folderId) {
-      return response(400, {
-        message: "folderId, image, and imageName are required.",
-      });
+    if (!folderId || !username) {
+      return response(400, { message: "folderId and username are required." });
     }
 
-    let imageBuffer: Buffer;
-    try {
-      imageBuffer = Buffer.from(image, "base64");
-    } catch {
-      return response(400, { message: "Invalid base64 image." });
-    }
+    await ddb.send(
+      new DeleteCommand({
+        TableName: BANNED_USERS_TABLE_NAME,
+        Key: { folderId, username },
+      }),
+    );
 
-    if (folderId !== "public") {
-      const folderExists = await ddb.send(
-        new GetCommand({
-          TableName: FOLDERS_TABLE_NAME,
-          Key: { folderId },
-        }),
-      );
-
-      if (!folderExists.Item) {
-        return response(404, { message: "Folder does not exist." });
-      }
-    }
-
-    const imageKey = `${folderId}/${imageName}`;
-
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: imageKey,
-      Body: imageBuffer,
-      ContentType: guessContentType(imageName) || "application/octet-stream",
-    });
-
-    await s3.send(putCommand);
-
-    return response(200, { message: `Image uploaded successfully as ${imageKey}` });
+    return response(200, { folderId, username });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: `Server error: ${message}` });
+    return response(500, { message: "Failed to unban user.", error: message });
   }
 };
 
@@ -116,19 +87,4 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
-}
-
-function guessContentType(filename: string) {
-  const ext = filename.toLowerCase().split(".").pop();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    default:
-      return null;
-  }
 }

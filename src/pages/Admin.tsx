@@ -17,6 +17,7 @@ type FolderUser = {
   enabled?: boolean;
   createdAt?: string;
   lastModifiedAt?: string;
+  bannedAt?: string;
 };
 
 export default function Admin() {
@@ -39,6 +40,9 @@ export default function Admin() {
   const [folderUsers, setFolderUsers] = useState<FolderUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [bannedUsers, setBannedUsers] = useState<FolderUser[]>([]);
+  const [bannedLoading, setBannedLoading] = useState(false);
+  const [bannedError, setBannedError] = useState<string | null>(null);
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [userActionKey, setUserActionKey] = useState<string | null>(null);
@@ -136,6 +140,8 @@ export default function Admin() {
     if (!apiBase) return;
     setUsersLoading(true);
     setUsersError(null);
+    setBannedLoading(true);
+    setBannedError(null);
     try {
       const res = await authFetch(
         `${apiBase}/folder-users?folderId=${encodeURIComponent(folderId)}`,
@@ -146,12 +152,18 @@ export default function Admin() {
       }
       const payload = await res.json();
       const users: FolderUser[] = Array.isArray(payload.users) ? payload.users : [];
+      const banned: FolderUser[] = Array.isArray(payload.bannedUsers)
+        ? payload.bannedUsers
+        : [];
       setFolderUsers(users);
+      setBannedUsers(banned);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load users.";
       setUsersError(message);
+      setBannedError(message);
     } finally {
       setUsersLoading(false);
+      setBannedLoading(false);
     }
   };
 
@@ -199,9 +211,36 @@ export default function Admin() {
         throw new Error(payload?.message ?? "Remove failed.");
       }
       setFolderUsers((prev) => prev.filter((entry) => entry.username !== username));
+      loadFolderUsers(selectedFolder).catch(() => undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Remove failed.";
       setUsersError(message);
+    } finally {
+      setUserActionKey(null);
+    }
+  };
+
+  const unbanFolderUser = async (username: string) => {
+    if (!apiBase || !selectedFolder) return;
+    const confirmed = window.confirm(
+      `Unban ${username} for ${selectedFolder}? They can accept invites again.`,
+    );
+    if (!confirmed) return;
+    setUserActionKey(username);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-unban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: selectedFolder, username }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Unban failed.");
+      }
+      setBannedUsers((prev) => prev.filter((entry) => entry.username !== username));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unban failed.";
+      setBannedError(message);
     } finally {
       setUserActionKey(null);
     }
@@ -215,6 +254,7 @@ export default function Admin() {
   useEffect(() => {
     if (!selectedFolder) {
       setFolderUsers([]);
+      setBannedUsers([]);
       return;
     }
     loadFolderUsers(selectedFolder).catch(() => undefined);
@@ -789,6 +829,78 @@ export default function Admin() {
                           disabled={userActionKey === userEntry.username}
                         >
                           Remove from folder
+                        </Button>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Banned Users
+              </Typography>
+              <Typography sx={{ mb: 2, color: mutedText }}>
+                {selectedFolder
+                  ? `Users banned from ${selectedFolder}.`
+                  : "Select a folder to view banned users."}
+              </Typography>
+              {!selectedFolder ? (
+                <Box sx={{ color: mutedText }}>Select a folder to view banned users.</Box>
+              ) : bannedLoading ? (
+                <Box sx={{ color: mutedText }}>Loading banned users...</Box>
+              ) : bannedError ? (
+                <Box sx={{ color: mutedText }}>{bannedError}</Box>
+              ) : bannedUsers.length === 0 ? (
+                <Box sx={{ color: mutedText }}>No banned users for this folder.</Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {bannedUsers.map((userEntry) => (
+                    <Box
+                      key={userEntry.username}
+                      sx={{
+                        display: "flex",
+                        flexDirection: { xs: "column", sm: "row" },
+                        gap: 2,
+                        alignItems: { xs: "flex-start", sm: "center" },
+                        padding: 2,
+                        borderRadius: 1,
+                        background: "rgba(255, 99, 71, 0.08)",
+                        border: "1px solid rgba(255, 99, 71, 0.25)",
+                      }}
+                    >
+                      <Box sx={{ flex: 1 }}>
+                        <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
+                          {formatUserName(userEntry)}
+                        </Box>
+                        <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                          Username: {userEntry.username}
+                        </Box>
+                        {userEntry.email && (
+                          <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                            Email: {userEntry.email}
+                          </Box>
+                        )}
+                      </Box>
+                      <Box
+                        sx={{
+                          fontSize: "0.75rem",
+                          color: mutedText,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                          alignItems: { xs: "flex-start", sm: "flex-end" },
+                        }}
+                      >
+                        <Box>Banned: {formatDate(userEntry.bannedAt)}</Box>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => unbanFolderUser(userEntry.username)}
+                          disabled={userActionKey === userEntry.username}
+                        >
+                          Remove ban
                         </Button>
                       </Box>
                     </Box>

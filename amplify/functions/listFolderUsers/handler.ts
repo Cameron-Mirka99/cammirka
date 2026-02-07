@@ -8,6 +8,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
+const BANNED_USERS_TABLE_NAME = process.env.BANNED_USERS_TABLE_NAME;
 
 const cognito = new CognitoIdentityProviderClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -16,7 +17,7 @@ export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!USER_POOL_ID || !FOLDER_USERS_TABLE_NAME) {
+    if (!USER_POOL_ID || !FOLDER_USERS_TABLE_NAME || !BANNED_USERS_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -34,7 +35,8 @@ export const handler = async (
     }
 
     const users = await fetchUsersForFolder(folderId);
-    return response(200, { folderId, users });
+    const bannedUsers = await fetchBannedUsersForFolder(folderId);
+    return response(200, { folderId, users, bannedUsers });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -53,6 +55,29 @@ async function fetchUsersForFolder(folderId: string) {
   );
 
   return users.filter((userEntry): userEntry is NonNullable<typeof userEntry> => Boolean(userEntry));
+}
+
+async function fetchBannedUsersForFolder(folderId: string) {
+  const mappedUsers = await queryBannedFolderUsers(folderId);
+  if (mappedUsers.length === 0) {
+    return [];
+  }
+
+  const users = await Promise.all(
+    mappedUsers.map((entry) => fetchUser(entry.username)),
+  );
+
+  return users
+    .map((userEntry, index) => {
+      if (!userEntry) return null;
+      return {
+        ...userEntry,
+        bannedAt: mappedUsers[index]?.bannedAt,
+      };
+    })
+    .filter(
+      (userEntry): userEntry is NonNullable<typeof userEntry> => Boolean(userEntry),
+    );
 }
 
 async function fetchUser(username: string) {
@@ -101,6 +126,34 @@ async function queryFolderUsers(folderId: string) {
         entries.push({
           username: item.username,
           createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
+        });
+      }
+    }
+    lastEvaluatedKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastEvaluatedKey);
+
+  return entries;
+}
+
+async function queryBannedFolderUsers(folderId: string) {
+  const entries: Array<{ username: string; bannedAt?: string }> = [];
+  let lastEvaluatedKey: Record<string, unknown> | undefined;
+  do {
+    const result = await ddb.send(
+      new QueryCommand({
+        TableName: BANNED_USERS_TABLE_NAME,
+        KeyConditionExpression: "folderId = :folderId",
+        ExpressionAttributeValues: {
+          ":folderId": folderId,
+        },
+        ExclusiveStartKey: lastEvaluatedKey,
+      }),
+    );
+    for (const item of result.Items ?? []) {
+      if (typeof item.username === "string") {
+        entries.push({
+          username: item.username,
+          bannedAt: typeof item.bannedAt === "string" ? item.bannedAt : undefined,
         });
       }
     }

@@ -1,8 +1,9 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, DeleteCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
+const BANNED_USERS_TABLE_NAME = process.env.BANNED_USERS_TABLE_NAME;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -10,7 +11,7 @@ export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!FOLDER_USERS_TABLE_NAME) {
+    if (!FOLDER_USERS_TABLE_NAME || !BANNED_USERS_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -27,12 +28,24 @@ export const handler = async (
       return response(400, { message: "folderId and username are required." });
     }
 
-    await ddb.send(
-      new DeleteCommand({
-        TableName: FOLDER_USERS_TABLE_NAME,
-        Key: { folderId, username },
-      }),
-    );
+    await Promise.all([
+      ddb.send(
+        new DeleteCommand({
+          TableName: FOLDER_USERS_TABLE_NAME,
+          Key: { folderId, username },
+        }),
+      ),
+      ddb.send(
+        new PutCommand({
+          TableName: BANNED_USERS_TABLE_NAME,
+          Item: {
+            folderId,
+            username,
+            bannedAt: new Date().toISOString(),
+          },
+        }),
+      ),
+    ]);
 
     return response(200, { folderId, username });
   } catch (error) {

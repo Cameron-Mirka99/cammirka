@@ -6,6 +6,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 const INVITES_TABLE_NAME = process.env.INVITES_TABLE_NAME;
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
+const BANNED_USERS_TABLE_NAME = process.env.BANNED_USERS_TABLE_NAME;
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const cognito = new CognitoIdentityProviderClient({});
@@ -14,7 +15,7 @@ export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (!INVITES_TABLE_NAME || !USER_POOL_ID || !FOLDER_USERS_TABLE_NAME) {
+    if (!INVITES_TABLE_NAME || !USER_POOL_ID || !FOLDER_USERS_TABLE_NAME || !BANNED_USERS_TABLE_NAME) {
       return response(500, { message: "Server configuration is incomplete." });
     }
 
@@ -55,6 +56,17 @@ export const handler = async (
 
     if (expiresAt && expiresAt < Math.floor(Date.now() / 1000)) {
       return response(410, { message: "Invite has expired." });
+    }
+
+    const banResult = await ddb.send(
+      new GetCommand({
+        TableName: BANNED_USERS_TABLE_NAME,
+        Key: { folderId, username },
+      }),
+    );
+
+    if (banResult.Item) {
+      return response(403, { message: "You are banned from this folder." });
     }
 
     const currentFolder = claims?.["custom:folderId"];

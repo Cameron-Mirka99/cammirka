@@ -32,6 +32,7 @@ import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
+import { unbanFolderUser } from "./functions/unbanFolderUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
 const backend = defineBackend({
@@ -50,6 +51,7 @@ const backend = defineBackend({
   movePhoto,
   publicPhotos,
   removeFolderUser,
+  unbanFolderUser,
   uploadImageFunction,
 });
 
@@ -68,6 +70,12 @@ const invitesTable = new Table(infraStack, "InvitesTable", {
 });
 
 const folderUsersTable = new Table(infraStack, "FolderUsersTable", {
+  partitionKey: { name: "folderId", type: AttributeType.STRING },
+  sortKey: { name: "username", type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+});
+
+const bannedFolderUsersTable = new Table(infraStack, "BannedFolderUsersTable", {
   partitionKey: { name: "folderId", type: AttributeType.STRING },
   sortKey: { name: "username", type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
@@ -176,6 +184,10 @@ backend.acceptInvite.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
 );
+backend.acceptInvite.addEnvironment(
+  "BANNED_USERS_TABLE_NAME",
+  bannedFolderUsersTable.tableName,
+);
 backend.backfillFolderUsers.addEnvironment(
   "USER_POOL_ID",
   backend.auth.resources.userPool.userPoolId,
@@ -191,6 +203,10 @@ backend.listFolderUsers.addEnvironment(
 backend.listFolderUsers.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
+);
+backend.listFolderUsers.addEnvironment(
+  "BANNED_USERS_TABLE_NAME",
+  bannedFolderUsersTable.tableName,
 );
 backend.listUserFolders.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
@@ -203,6 +219,14 @@ backend.listUserFolders.addEnvironment(
 backend.removeFolderUser.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
+);
+backend.removeFolderUser.addEnvironment(
+  "BANNED_USERS_TABLE_NAME",
+  bannedFolderUsersTable.tableName,
+);
+backend.unbanFolderUser.addEnvironment(
+  "BANNED_USERS_TABLE_NAME",
+  bannedFolderUsersTable.tableName,
 );
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
@@ -219,6 +243,10 @@ folderUsersTable.grantReadData(backend.listUserFolders.resources.lambda);
 folderUsersTable.grantReadData(backend.getPhotoList.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lambda);
 foldersTable.grantReadData(backend.listUserFolders.resources.lambda);
+bannedFolderUsersTable.grantReadData(backend.acceptInvite.resources.lambda);
+bannedFolderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
+bannedFolderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lambda);
+bannedFolderUsersTable.grantReadWriteData(backend.unbanFolderUser.resources.lambda);
 
 backend.acceptInvite.resources.lambda.addToRolePolicy(
   new PolicyStatement({
@@ -339,6 +367,15 @@ const removeFolderUserIntegration = new LambdaIntegration(
 );
 const removeFolderUserResource = restApi.root.addResource("folder-users-remove");
 removeFolderUserResource.addMethod("POST", removeFolderUserIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const unbanFolderUserIntegration = new LambdaIntegration(
+  backend.unbanFolderUser.resources.lambda,
+);
+const unbanFolderUserResource = restApi.root.addResource("folder-users-unban");
+unbanFolderUserResource.addMethod("POST", unbanFolderUserIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
