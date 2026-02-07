@@ -26,17 +26,17 @@ export const handler = async (
     const imageName = body?.imageName;
     const folderId = sanitizeFolderId(body?.folderId);
 
-    if (!image || !imageName || !folderId) {
+    if (!folderId) {
       return response(400, {
-        message: "folderId, image, and imageName are required.",
+        message: "folderId is required.",
       });
     }
 
-    let imageBuffer: Buffer;
-    try {
-      imageBuffer = Buffer.from(image, "base64");
-    } catch {
-      return response(400, { message: "Invalid base64 image." });
+    const uploads = normalizeUploads(body);
+    if (uploads.length === 0) {
+      return response(400, {
+        message: "At least one image upload is required.",
+      });
     }
 
     if (folderId !== "public") {
@@ -52,18 +52,51 @@ export const handler = async (
       }
     }
 
-    const imageKey = `${folderId}/${imageName}`;
+    const results = await Promise.all(
+      uploads.map(async (upload) => {
+        let imageBuffer: Buffer;
+        try {
+          imageBuffer = Buffer.from(upload.image, "base64");
+        } catch {
+          return {
+            imageName: upload.imageName,
+            ok: false,
+            message: "Invalid base64 image.",
+          };
+        }
 
-    const putCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: imageKey,
-      Body: imageBuffer,
-      ContentType: guessContentType(imageName) || "application/octet-stream",
+        const imageKey = `${folderId}/${upload.imageName}`;
+
+        const putCommand = new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: imageKey,
+          Body: imageBuffer,
+          ContentType:
+            guessContentType(upload.imageName) || "application/octet-stream",
+        });
+
+        await s3.send(putCommand);
+
+        return {
+          imageName: upload.imageName,
+          ok: true,
+          key: imageKey,
+        };
+      }),
+    );
+
+    const failed = results.filter((entry) => !entry.ok);
+    if (failed.length > 0) {
+      return response(207, {
+        message: "Some uploads failed.",
+        results,
+      });
+    }
+
+    return response(200, {
+      message: `Uploaded ${results.length} image(s) successfully.`,
+      results,
     });
-
-    await s3.send(putCommand);
-
-    return response(200, { message: `Image uploaded successfully as ${imageKey}` });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -78,6 +111,29 @@ function parseBody(event: APIGatewayProxyEvent) {
   } catch {
     return null;
   }
+}
+
+function normalizeUploads(body: {
+  image?: string;
+  imageName?: string;
+  images?: Array<{ image?: string; imageName?: string }>;
+}) {
+  if (!body) return [];
+  if (Array.isArray(body.images)) {
+    return body.images
+      .map((entry) => ({
+        image: typeof entry?.image === "string" ? entry.image : "",
+        imageName:
+          typeof entry?.imageName === "string" ? entry.imageName.trim() : "",
+      }))
+      .filter((entry) => entry.image && entry.imageName);
+  }
+  if (typeof body.image === "string" && typeof body.imageName === "string") {
+    const imageName = body.imageName.trim();
+    if (!imageName) return [];
+    return [{ image: body.image, imageName }];
+  }
+  return [];
 }
 
 function sanitizeFolderId(value?: string) {

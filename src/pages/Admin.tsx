@@ -28,7 +28,7 @@ export default function Admin() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [uploadFolderId, setUploadFolderId] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [folderItems, setFolderItems] = useState<Photo[]>([]);
@@ -325,19 +325,23 @@ export default function Admin() {
       setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
       return;
     }
-    if (!uploadFile) {
-      setStatusMessage("Select a file to upload.");
+    if (uploadFiles.length === 0) {
+      setStatusMessage("Select one or more files to upload.");
       return;
     }
 
-    const base64 = await toBase64(uploadFile);
+    const images = await Promise.all(
+      uploadFiles.map(async (file) => ({
+        imageName: file.name,
+        image: await toBase64(file),
+      })),
+    );
     const res = await authFetch(`${apiBase}/upload-image`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         folderId: uploadFolderId,
-        imageName: uploadFile.name,
-        image: base64,
+        images,
       }),
     });
     const payload = await res.json();
@@ -346,7 +350,7 @@ export default function Admin() {
       return;
     }
     setStatusMessage(payload.message ?? "Upload complete.");
-    setUploadFile(null);
+    setUploadFiles([]);
   };
 
 
@@ -1006,20 +1010,23 @@ export default function Admin() {
                     InputProps={{ sx: { color: "text.primary" } }}
                   />
                   <Button variant="outlined" component="label">
-                    Choose file
+                    Choose files
                     <input
                       type="file"
                       hidden
-                      onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+                      multiple
+                      onChange={(event) =>
+                        setUploadFiles(Array.from(event.target.files ?? []))
+                      }
                     />
                   </Button>
                   <Button variant="contained" onClick={uploadImage}>
                     Upload
                   </Button>
                 </Box>
-                {uploadFile && (
+                {uploadFiles.length > 0 && (
                   <Box sx={{ mt: 1, color: mutedText }}>
-                    Selected: {uploadFile.name}
+                    Selected: {uploadFiles.map((file) => file.name).join(", ")}
                   </Box>
                 )}
               </Box>
