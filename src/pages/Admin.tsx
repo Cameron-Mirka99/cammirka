@@ -226,6 +226,9 @@ export default function Admin() {
     }
     setStatusMessage(payload.message ?? "Upload complete.");
     setUploadFiles([]);
+    if (selectedFolder && uploadFolderId && selectedFolder === uploadFolderId) {
+      loadFolderItems(selectedFolder).catch(() => undefined);
+    }
   };
 
   const deleteFolder = async (folderIdToDelete: string) => {
