@@ -1,4 +1,4 @@
-import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Container, MenuItem, Paper, TextField, Typography, useTheme } from "@mui/material";
+import { Box, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
@@ -6,19 +6,14 @@ import { Header } from "../components/Header";
 import { Photo } from "../types/photo";
 import { photoApiBaseUrl } from "../utils/apiConfig";
 import { authFetch } from "../utils/authFetch";
-
-type FolderUser = {
-  username: string;
-  email?: string;
-  name?: string;
-  givenName?: string;
-  familyName?: string;
-  status?: string;
-  enabled?: boolean;
-  createdAt?: string;
-  lastModifiedAt?: string;
-  bannedAt?: string;
-};
+import { AdvancedSection } from "./admin/AdvancedSection";
+import { CreateFolderSection } from "./admin/CreateFolderSection";
+import { CreateInviteSection } from "./admin/CreateInviteSection";
+import { FolderAccessPanel } from "./admin/FolderAccessPanel";
+import { FolderItemsSection } from "./admin/FolderItemsSection";
+import { FoldersSidebar } from "./admin/FoldersSidebar";
+import { UploadPhotoSection } from "./admin/UploadPhotoSection";
+import { FolderSummary, FolderUser } from "./admin/types";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -46,9 +41,7 @@ export default function Admin() {
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [userActionKey, setUserActionKey] = useState<string | null>(null);
-  const [folders, setFolders] = useState<Array<{ folderId: string; displayName?: string }>>(
-    [],
-  );
+  const [folders, setFolders] = useState<FolderSummary[]>([]);
   const itemsPerPage = 10;
 
   const theme = useTheme();
@@ -59,35 +52,16 @@ export default function Admin() {
   const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.08);
 
   const apiBase = photoApiBaseUrl;
+  const showFolderAccessPanel = Boolean(selectedFolder && selectedFolder !== "public");
 
   const getFileName = (key: string) => key.split("/").pop() ?? key;
-  const formatUserName = (userEntry: FolderUser) => {
-    if (userEntry.name) return userEntry.name;
-    const combined = [userEntry.givenName, userEntry.familyName]
-      .filter(Boolean)
-      .join(" ");
-    if (combined) return combined;
-    return userEntry.email ?? userEntry.username;
-  };
-  const formatDate = (value?: string) => {
-    if (!value) return "Unknown";
-    const date = new Date(value);
-    if (Number.isNaN(date.valueOf())) return value;
-    return date.toLocaleString();
-  };
 
   const loadFolders = async () => {
     if (!apiBase) return;
-    const res = await authFetch(`${apiBase}/folders`, {
-      method: "GET",
-    });
+    const res = await authFetch(`${apiBase}/folders`, { method: "GET" });
     if (!res.ok) return;
     const payload = await res.json();
-    const items: Array<{ folderId: string; displayName?: string }> = Array.isArray(
-      payload.folders,
-    )
-      ? payload.folders
-      : [];
+    const items: FolderSummary[] = Array.isArray(payload.folders) ? payload.folders : [];
     const withDefault = [
       { folderId: "public", displayName: "Public Gallery" },
       ...items.filter((item) => item.folderId !== "public"),
@@ -111,7 +85,7 @@ export default function Admin() {
     setItemsPage(1);
   }, [folders, selectedFolder]);
 
-  const loadFolderItems = async (folderId: string) => {
+  const loadFolderItems = async (folderIdToLoad: string) => {
     if (!apiBase) return;
     setItemsLoading(true);
     setItemsError(null);
@@ -119,7 +93,7 @@ export default function Admin() {
       const res = await authFetch(`${apiBase}/photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId, limit: 1000 }),
+        body: JSON.stringify({ folderId: folderIdToLoad, limit: 1000 }),
       });
       if (!res.ok) {
         throw new Error(`Failed to load folder items: ${res.status}`);
@@ -136,7 +110,7 @@ export default function Admin() {
     }
   };
 
-  const loadFolderUsers = async (folderId: string) => {
+  const loadFolderUsers = async (folderIdToLoad: string) => {
     if (!apiBase) return;
     setUsersLoading(true);
     setUsersError(null);
@@ -144,7 +118,7 @@ export default function Admin() {
     setBannedError(null);
     try {
       const res = await authFetch(
-        `${apiBase}/folder-users?folderId=${encodeURIComponent(folderId)}`,
+        `${apiBase}/folder-users?folderId=${encodeURIComponent(folderIdToLoad)}`,
         { method: "GET" },
       );
       if (!res.ok) {
@@ -152,9 +126,7 @@ export default function Admin() {
       }
       const payload = await res.json();
       const users: FolderUser[] = Array.isArray(payload.users) ? payload.users : [];
-      const banned: FolderUser[] = Array.isArray(payload.bannedUsers)
-        ? payload.bannedUsers
-        : [];
+      const banned: FolderUser[] = Array.isArray(payload.bannedUsers) ? payload.bannedUsers : [];
       setFolderUsers(users);
       setBannedUsers(banned);
     } catch (err) {
@@ -166,99 +138,6 @@ export default function Admin() {
       setBannedLoading(false);
     }
   };
-
-  const backfillFolderUsers = async () => {
-    if (!apiBase) return;
-    setBackfillMessage(null);
-    setBackfillLoading(true);
-    try {
-      const res = await authFetch(`${apiBase}/folder-users-backfill`, {
-        method: "POST",
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload?.message ?? "Backfill failed.");
-      }
-      const scanned = payload?.scanned ?? 0;
-      const updated = payload?.updated ?? 0;
-      setBackfillMessage(`Backfill complete. Scanned ${scanned}, updated ${updated}.`);
-      if (selectedFolder) {
-        loadFolderUsers(selectedFolder).catch(() => undefined);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to backfill.";
-      setBackfillMessage(message);
-    } finally {
-      setBackfillLoading(false);
-    }
-  };
-
-  const removeFolderUser = async (username: string) => {
-    if (!apiBase || !selectedFolder) return;
-    const confirmed = window.confirm(
-      `Remove ${username} from ${selectedFolder}? They will no longer have access to this folder.`,
-    );
-    if (!confirmed) return;
-    setUserActionKey(username);
-    try {
-      const res = await authFetch(`${apiBase}/folder-users-remove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: selectedFolder, username }),
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload?.message ?? "Remove failed.");
-      }
-      setFolderUsers((prev) => prev.filter((entry) => entry.username !== username));
-      loadFolderUsers(selectedFolder).catch(() => undefined);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Remove failed.";
-      setUsersError(message);
-    } finally {
-      setUserActionKey(null);
-    }
-  };
-
-  const unbanFolderUser = async (username: string) => {
-    if (!apiBase || !selectedFolder) return;
-    const confirmed = window.confirm(
-      `Unban ${username} for ${selectedFolder}? They can accept invites again.`,
-    );
-    if (!confirmed) return;
-    setUserActionKey(username);
-    try {
-      const res = await authFetch(`${apiBase}/folder-users-unban`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: selectedFolder, username }),
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload?.message ?? "Unban failed.");
-      }
-      setBannedUsers((prev) => prev.filter((entry) => entry.username !== username));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unban failed.";
-      setBannedError(message);
-    } finally {
-      setUserActionKey(null);
-    }
-  };
-
-  useEffect(() => {
-    if (!selectedFolder) return;
-    loadFolderItems(selectedFolder).catch(() => undefined);
-  }, [selectedFolder]);
-
-  useEffect(() => {
-    if (!selectedFolder) {
-      setFolderUsers([]);
-      setBannedUsers([]);
-      return;
-    }
-    loadFolderUsers(selectedFolder).catch(() => undefined);
-  }, [selectedFolder]);
 
   const createFolder = async () => {
     setStatusMessage(null);
@@ -308,8 +187,7 @@ export default function Admin() {
       return;
     }
     const inviteCode = payload.inviteCode;
-    const url = `${window.location.origin}/login?invite=${inviteCode}`;
-    setInviteUrl(url);
+    setInviteUrl(`${window.location.origin}/login?invite=${inviteCode}`);
     if (!silent) {
       setStatusMessage(`Invite ready for ${payload.folderId}`);
       if (!folderOverride) {
@@ -339,10 +217,7 @@ export default function Admin() {
     const res = await authFetch(`${apiBase}/upload-image`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        folderId: uploadFolderId,
-        images,
-      }),
+      body: JSON.stringify({ folderId: uploadFolderId, images }),
     });
     const payload = await res.json();
     if (!res.ok) {
@@ -352,7 +227,6 @@ export default function Admin() {
     setStatusMessage(payload.message ?? "Upload complete.");
     setUploadFiles([]);
   };
-
 
   const deleteFolder = async (folderIdToDelete: string) => {
     setStatusMessage(null);
@@ -475,23 +349,111 @@ export default function Admin() {
     setActionKey(null);
   };
 
+  const backfillFolderUsers = async () => {
+    if (!apiBase) return;
+    setBackfillMessage(null);
+    setBackfillLoading(true);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-backfill`, {
+        method: "POST",
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Backfill failed.");
+      }
+      const scanned = payload?.scanned ?? 0;
+      const updated = payload?.updated ?? 0;
+      setBackfillMessage(`Backfill complete. Scanned ${scanned}, updated ${updated}.`);
+      if (showFolderAccessPanel && selectedFolder) {
+        loadFolderUsers(selectedFolder).catch(() => undefined);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to backfill.";
+      setBackfillMessage(message);
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
+
+  const removeFolderUser = async (username: string) => {
+    if (!apiBase || !selectedFolder || selectedFolder === "public") return;
+    const confirmed = window.confirm(
+      `Remove ${username} from ${selectedFolder}? They will no longer have access to this folder.`,
+    );
+    if (!confirmed) return;
+    setUserActionKey(username);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-remove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: selectedFolder, username }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Remove failed.");
+      }
+      setFolderUsers((prev) => prev.filter((entry) => entry.username !== username));
+      loadFolderUsers(selectedFolder).catch(() => undefined);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Remove failed.";
+      setUsersError(message);
+    } finally {
+      setUserActionKey(null);
+    }
+  };
+
+  const unbanFolderUser = async (username: string) => {
+    if (!apiBase || !selectedFolder || selectedFolder === "public") return;
+    const confirmed = window.confirm(
+      `Unban ${username} for ${selectedFolder}? They can accept invites again.`,
+    );
+    if (!confirmed) return;
+    setUserActionKey(username);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-unban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: selectedFolder, username }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Unban failed.");
+      }
+      setBannedUsers((prev) => prev.filter((entry) => entry.username !== username));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unban failed.";
+      setBannedError(message);
+    } finally {
+      setUserActionKey(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedFolder) return;
+    loadFolderItems(selectedFolder).catch(() => undefined);
+  }, [selectedFolder]);
+
+  useEffect(() => {
+    if (!showFolderAccessPanel || !selectedFolder) {
+      setFolderUsers([]);
+      setBannedUsers([]);
+      setUsersError(null);
+      setBannedError(null);
+      return;
+    }
+    loadFolderUsers(selectedFolder).catch(() => undefined);
+  }, [selectedFolder, showFolderAccessPanel]);
+
   return (
     <>
       <Header />
       {isAdmin ? (
-        <Container
-          maxWidth="lg"
-          sx={{ color: "text.primary", pt: { xs: 2, sm: 3, md: 4 } }}
-        >
+        <Container maxWidth="lg" sx={{ color: "text.primary", pt: { xs: 2, sm: 3, md: 4 } }}>
           <Typography variant="h4" sx={{ mb: 4 }}>
             Admin
           </Typography>
 
-          {statusMessage && (
-            <Box sx={{ mb: 3, color: mutedText }}>
-              {statusMessage}
-            </Box>
-          )}
+          {statusMessage && <Box sx={{ mb: 3, color: mutedText }}>{statusMessage}</Box>}
 
           <Box
             sx={{
@@ -500,572 +462,111 @@ export default function Admin() {
               gap: 4,
             }}
           >
+            <FoldersSidebar
+              folders={folders}
+              selectedFolder={selectedFolder}
+              folderIdInput={folderId}
+              mutedText={mutedText}
+              subtleBorder={subtleBorder}
+              cardBg={cardBg}
+              itemBg={itemBg}
+              onSelectFolder={(folderIdToSelect) => {
+                setSelectedFolder(folderIdToSelect);
+                setInviteFolderId(folderIdToSelect);
+                setUploadFolderId(folderIdToSelect);
+                createInvite(folderIdToSelect, true);
+              }}
+              onDeleteFolder={deleteFolder}
+              onSeedFolderId={setFolderId}
+            />
+
             <Box
               sx={{
-                border: `1px solid ${subtleBorder}`,
-                borderRadius: 2,
-                padding: 2,
-                background: cardBg,
-                maxHeight: "70vh",
-                overflowY: "auto",
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  xl: showFolderAccessPanel ? "minmax(0, 1fr) 340px" : "1fr",
+                },
+                gap: 3,
+                alignItems: "start",
               }}
             >
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Folders
-              </Typography>
-              {folders.length === 0 ? (
-                <Box sx={{ color: mutedText }}>
-                  No folders yet.
-                </Box>
-              ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {folders.map((folder) => {
-                    const isDefault = folder.folderId === "public";
-                    return (
-                    <Box
-                      key={folder.folderId}
-                      onClick={() => {
-                        setSelectedFolder(folder.folderId);
-                        setInviteFolderId(folder.folderId);
-                        setUploadFolderId(folder.folderId);
-                        createInvite(folder.folderId, true);
-                        if (!folderId) {
-                          setFolderId(folder.folderId);
-                        }
-                      }}
-                      sx={{
-                        padding: "6px 10px",
-                        borderRadius: 1,
-                          background:
-                            isDefault
-                              ? "rgba(0, 217, 255, 0.16)"
-                            : selectedFolder === folder.folderId
-                            ? "rgba(255, 179, 0, 0.2)"
-                            : itemBg,
-                        fontSize: "0.9rem",
-                        cursor: "pointer",
-                        border:
-                          isDefault
-                            ? "1px solid rgba(0, 217, 255, 0.5)"
-                            : selectedFolder === folder.folderId
-                            ? "1px solid rgba(255, 179, 0, 0.5)"
-                            : "1px solid transparent",
-                      }}
-                    >
-                      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                        <Box>
-                          <Box sx={{ fontSize: "0.9rem", color: "text.primary" }}>
-                            {folder.displayName ?? folder.folderId}
-                          </Box>
-                          <Box
-                            sx={{
-                              fontSize: "0.75rem",
-                              color: mutedText,
-                              display: "flex",
-                              gap: 1,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <strong>Id:</strong>
-                            <span>{folder.folderId}</span>
-                          </Box>
-                        </Box>
-                        {!isDefault && (
-                          <Button
-                            size="small"
-                            variant="text"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteFolder(folder.folderId);
-                            }}
-                            sx={{
-                              color: mutedText,
-                              minWidth: "auto",
-                              padding: "0 6px",
-                            }}
-                          >
-                            Delete
-                          </Button>
-                        )}
-                      </Box>
-                    </Box>
-                  );
-                  })}
-                </Box>
-              )}
-            </Box>
+              <Box>
+                <FolderItemsSection
+                  selectedFolder={selectedFolder}
+                  folders={folders}
+                  itemsMoveTarget={itemsMoveTarget}
+                  setItemsMoveTarget={setItemsMoveTarget}
+                  itemsLoading={itemsLoading}
+                  itemsError={itemsError}
+                  folderItems={folderItems}
+                  itemsPage={itemsPage}
+                  itemsPerPage={itemsPerPage}
+                  setItemsPage={setItemsPage}
+                  actionKey={actionKey}
+                  mutedText={mutedText}
+                  onRefresh={() => selectedFolder && loadFolderItems(selectedFolder)}
+                  onDuplicate={duplicatePhoto}
+                  onMove={movePhotoFromList}
+                  onDelete={deletePhoto}
+                />
 
-            <Box>
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Folder Items
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                Select a folder on the left to view its contents.
-              </Typography>
-              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
-                <TextField
-                  label="Target folder (move/duplicate)"
-                  select
-                  value={itemsMoveTarget}
-                  onChange={(event) => setItemsMoveTarget(event.target.value)}
-                  sx={{ minWidth: 240 }}
-                  InputLabelProps={{ sx: { color: "text.secondary" } }}
-                  InputProps={{ sx: { color: "text.primary" } }}
-                  disabled={!selectedFolder || folders.length === 0}
-                >
-                  {folders.map((folder) => (
-                    <MenuItem
-                      key={folder.folderId}
-                      value={folder.folderId}
-                      disabled={folder.folderId === selectedFolder}
-                    >
-                      {folder.displayName ?? folder.folderId}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  variant="outlined"
-                  onClick={() => selectedFolder && loadFolderItems(selectedFolder)}
-                  disabled={!selectedFolder || itemsLoading}
-                >
-                  Refresh
-                </Button>
+                <CreateFolderSection
+                  folderId={folderId}
+                  displayName={displayName}
+                  mutedText={mutedText}
+                  setFolderId={setFolderId}
+                  setDisplayName={setDisplayName}
+                  onCreateFolder={createFolder}
+                />
+
+                <CreateInviteSection
+                  inviteFolderId={inviteFolderId}
+                  inviteLoading={inviteLoading}
+                  inviteUrl={inviteUrl}
+                  mutedText={mutedText}
+                  setInviteFolderId={setInviteFolderId}
+                  onCreateInvite={() => createInvite()}
+                />
+
+                <UploadPhotoSection
+                  uploadFolderId={uploadFolderId}
+                  uploadFiles={uploadFiles}
+                  mutedText={mutedText}
+                  setUploadFolderId={setUploadFolderId}
+                  setUploadFiles={setUploadFiles}
+                  onUpload={uploadImage}
+                />
               </Box>
 
-              {!selectedFolder ? (
-                <Box sx={{ color: mutedText }}>Select a folder to view items.</Box>
-              ) : itemsLoading ? (
-                <Box sx={{ color: mutedText }}>Loading items...</Box>
-              ) : itemsError ? (
-                <Box sx={{ color: mutedText }}>{itemsError}</Box>
-              ) : folderItems.length === 0 ? (
-                <Box sx={{ color: mutedText }}>No items in this folder yet.</Box>
-              ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                {folderItems
-                  .slice(
-                    (itemsPage - 1) * itemsPerPage,
-                    itemsPage * itemsPerPage,
-                  )
-                  .map((item) => (
-                  <Box
-                    key={item.key}
-                    sx={{
-                        display: "flex",
-                        flexDirection: { xs: "column", sm: "row" },
-                        gap: 2,
-                        alignItems: { xs: "flex-start", sm: "center" },
-                        padding: 2,
-                        borderRadius: 1,
-                        background: "rgba(255, 179, 0, 0.05)",
-                        border: "1px solid rgba(255, 179, 0, 0.2)",
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          background: "rgba(255, 179, 0, 0.1)",
-                          borderColor: "rgba(255, 179, 0, 0.4)",
-                        },
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src={item.url}
-                        alt={getFileName(item.key)}
-                        sx={{
-                          width: 90,
-                          height: 60,
-                          objectFit: "cover",
-                          borderRadius: 1,
-                          border: "1px solid rgba(255, 179, 0, 0.2)",
-                        }}
-                      />
-                      <Box sx={{ flex: 1 }}>
-                        <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
-                          {getFileName(item.key)}
-                        </Box>
-                        <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
-                          {item.key}
-                        </Box>
-                        <Box sx={{ fontSize: "0.7rem", color: mutedText, mt: 0.5 }}>
-                          Duplicate keeps the original and copies into the target folder.
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => duplicatePhoto(item.key)}
-                          disabled={actionKey === item.key}
-                        >
-                          Copy to folder
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => movePhotoFromList(item.key)}
-                          disabled={actionKey === item.key || !itemsMoveTarget}
-                        >
-                          Move
-                        </Button>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          onClick={() => deletePhoto(item.key)}
-                          disabled={actionKey === item.key}
-                        >
-                          Delete
-                        </Button>
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
+              {showFolderAccessPanel && selectedFolder && (
+                <FolderAccessPanel
+                  selectedFolder={selectedFolder}
+                  folderUsers={folderUsers}
+                  bannedUsers={bannedUsers}
+                  usersLoading={usersLoading}
+                  usersError={usersError}
+                  bannedLoading={bannedLoading}
+                  bannedError={bannedError}
+                  userActionKey={userActionKey}
+                  mutedText={mutedText}
+                  subtleBorder={subtleBorder}
+                  cardBg={cardBg}
+                  onRemoveUser={removeFolderUser}
+                  onUnbanUser={unbanFolderUser}
+                />
               )}
-              {selectedFolder && folderItems.length > itemsPerPage && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    mt: 2,
-                    gap: 2,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Typography sx={{ color: mutedText, fontSize: "0.85rem" }}>
-                    Showing {(itemsPage - 1) * itemsPerPage + 1}-
-                    {Math.min(itemsPage * itemsPerPage, folderItems.length)} of{" "}
-                    {folderItems.length}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => setItemsPage((page) => Math.max(1, page - 1))}
-                      disabled={itemsPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() =>
-                        setItemsPage((page) =>
-                          Math.min(page + 1, Math.ceil(folderItems.length / itemsPerPage)),
-                        )
-                      }
-                      disabled={itemsPage >= Math.ceil(folderItems.length / itemsPerPage)}
-                    >
-                      Next
-                    </Button>
-                  </Box>
-                </Box>
-              )}
-            </Box>
-
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Folder Users
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                {selectedFolder
-                  ? `Users assigned to ${selectedFolder}.`
-                  : "Select a folder to view users."}
-              </Typography>
-              {!selectedFolder ? (
-                <Box sx={{ color: mutedText }}>Select a folder to view users.</Box>
-              ) : usersLoading ? (
-                <Box sx={{ color: mutedText }}>Loading users...</Box>
-              ) : usersError ? (
-                <Box sx={{ color: mutedText }}>{usersError}</Box>
-              ) : folderUsers.length === 0 ? (
-                <Box sx={{ color: mutedText }}>No users assigned to this folder.</Box>
-              ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  {folderUsers.map((userEntry) => (
-                    <Box
-                      key={userEntry.username}
-                      sx={{
-                        display: "flex",
-                        flexDirection: { xs: "column", sm: "row" },
-                        gap: 2,
-                        alignItems: { xs: "flex-start", sm: "center" },
-                        padding: 2,
-                        borderRadius: 1,
-                        background: "rgba(0, 217, 255, 0.05)",
-                        border: "1px solid rgba(0, 217, 255, 0.2)",
-                      }}
-                    >
-                      <Box sx={{ flex: 1 }}>
-                        <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
-                          {formatUserName(userEntry)}
-                        </Box>
-                        <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
-                          Username: {userEntry.username}
-                        </Box>
-                        {userEntry.email && (
-                          <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
-                            Email: {userEntry.email}
-                          </Box>
-                        )}
-                      </Box>
-                      <Box
-                        sx={{
-                          fontSize: "0.75rem",
-                          color: mutedText,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 1,
-                          alignItems: { xs: "flex-start", sm: "flex-end" },
-                        }}
-                      >
-                        <Box>
-                          Status: {userEntry.status ?? "UNKNOWN"} ·{" "}
-                          {userEntry.enabled === false ? "Disabled" : "Enabled"}
-                        </Box>
-                        <Box>Created: {formatDate(userEntry.createdAt)}</Box>
-                        <Box>Last updated: {formatDate(userEntry.lastModifiedAt)}</Box>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          onClick={() => removeFolderUser(userEntry.username)}
-                          disabled={userActionKey === userEntry.username}
-                        >
-                          Remove from folder
-                        </Button>
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
-
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Banned Users
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                {selectedFolder
-                  ? `Users banned from ${selectedFolder}.`
-                  : "Select a folder to view banned users."}
-              </Typography>
-              {!selectedFolder ? (
-                <Box sx={{ color: mutedText }}>Select a folder to view banned users.</Box>
-              ) : bannedLoading ? (
-                <Box sx={{ color: mutedText }}>Loading banned users...</Box>
-              ) : bannedError ? (
-                <Box sx={{ color: mutedText }}>{bannedError}</Box>
-              ) : bannedUsers.length === 0 ? (
-                <Box sx={{ color: mutedText }}>No banned users for this folder.</Box>
-              ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  {bannedUsers.map((userEntry) => (
-                    <Box
-                      key={userEntry.username}
-                      sx={{
-                        display: "flex",
-                        flexDirection: { xs: "column", sm: "row" },
-                        gap: 2,
-                        alignItems: { xs: "flex-start", sm: "center" },
-                        padding: 2,
-                        borderRadius: 1,
-                        background: "rgba(255, 99, 71, 0.08)",
-                        border: "1px solid rgba(255, 99, 71, 0.25)",
-                      }}
-                    >
-                      <Box sx={{ flex: 1 }}>
-                        <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
-                          {formatUserName(userEntry)}
-                        </Box>
-                        <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
-                          Username: {userEntry.username}
-                        </Box>
-                        {userEntry.email && (
-                          <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
-                            Email: {userEntry.email}
-                          </Box>
-                        )}
-                      </Box>
-                      <Box
-                        sx={{
-                          fontSize: "0.75rem",
-                          color: mutedText,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 1,
-                          alignItems: { xs: "flex-start", sm: "flex-end" },
-                        }}
-                      >
-                        <Box>Banned: {formatDate(userEntry.bannedAt)}</Box>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => unbanFolderUser(userEntry.username)}
-                          disabled={userActionKey === userEntry.username}
-                        >
-                          Remove ban
-                        </Button>
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
-
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Create Folder
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                Example: folder ID <strong>client-jones</strong>, display name{" "}
-                <strong>Jones Family</strong>
-              </Typography>
-              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                  <TextField
-                    label="Folder ID"
-                    value={folderId}
-                    onChange={(event) => setFolderId(event.target.value)}
-                    sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "text.secondary" } }}
-                    InputProps={{ sx: { color: "text.primary" } }}
-                  />
-                  <TextField
-                    label="Display name"
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
-                    sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "text.secondary" } }}
-                    InputProps={{ sx: { color: "text.primary" } }}
-                  />
-                  <Button variant="contained" onClick={createFolder}>
-                    Create
-                  </Button>
-                </Box>
-              </Box>
-
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Create Invite
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                Example: create an invite for <strong>client-jones</strong>
-              </Typography>
-              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                  <TextField
-                    label="Folder ID"
-                    value={inviteFolderId}
-                    onChange={(event) => setInviteFolderId(event.target.value)}
-                    sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "text.secondary" } }}
-                    InputProps={{ sx: { color: "text.primary" } }}
-                  />
-                  <Button variant="contained" onClick={() => createInvite()}>
-                    Create Invite
-                  </Button>
-                </Box>
-                {inviteLoading && (
-                  <Box sx={{ mt: 2, color: mutedText }}>
-                    Preparing invite...
-                  </Box>
-                )}
-                {inviteUrl && !inviteLoading && (
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      mt: 2,
-                      p: 2,
-                      borderRadius: 2,
-                      background: "rgba(255, 179, 0, 0.05)",
-                      border: "1px solid rgba(255, 179, 0, 0.2)",
-                    }}
-                  >
-                    <Typography variant="subtitle2" sx={{ color: mutedText, mb: 1 }}>
-                      Invite URL
-                    </Typography>
-                    <Typography sx={{ color: "text.primary", wordBreak: "break-all" }}>
-                      {inviteUrl}
-                    </Typography>
-                  </Paper>
-                )}
-              </Box>
-
-            <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Upload Photo (Admin Only)
-              </Typography>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                Example: folder ID <strong>client-jones</strong>, file{" "}
-                <strong>IMG_1234.jpg</strong>
-              </Typography>
-              <Box
-                sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}
-                >
-                  <TextField
-                    label="Folder ID"
-                    value={uploadFolderId}
-                    onChange={(event) => setUploadFolderId(event.target.value)}
-                    sx={{ minWidth: 240 }}
-                    InputLabelProps={{ sx: { color: "text.secondary" } }}
-                    InputProps={{ sx: { color: "text.primary" } }}
-                  />
-                  <Button variant="outlined" component="label">
-                    Choose files
-                    <input
-                      type="file"
-                      hidden
-                      multiple
-                      onChange={(event) =>
-                        setUploadFiles(Array.from(event.target.files ?? []))
-                      }
-                    />
-                  </Button>
-                  <Button variant="contained" onClick={uploadImage}>
-                    Upload
-                  </Button>
-                </Box>
-                {uploadFiles.length > 0 && (
-                  <Box sx={{ mt: 1, color: mutedText }}>
-                    Selected: {uploadFiles.map((file) => file.name).join(", ")}
-                  </Box>
-                )}
-              </Box>
-
             </Box>
           </Box>
-          <Accordion
-            defaultExpanded={false}
-            sx={{
-              mt: 4,
-              mb: 4,
-              border: `1px solid ${subtleBorder}`,
-              borderRadius: 2,
-              background: cardBg,
-              "&:before": { display: "none" },
-            }}
-          >
-            <AccordionSummary
-              sx={{ paddingX: 2, paddingY: 1 }}
-              expandIcon={<span style={{ fontSize: "1.2rem", color: mutedText }}>+</span>}
-            >
-              <Typography variant="h6">Advanced</Typography>
-            </AccordionSummary>
-            <AccordionDetails sx={{ paddingX: 2, paddingBottom: 2 }}>
-              <Typography sx={{ mb: 2, color: mutedText }}>
-                Backfill folder-user mappings from the current user pool.
-              </Typography>
-              <Button
-                variant="outlined"
-                onClick={backfillFolderUsers}
-                disabled={backfillLoading}
-              >
-                {backfillLoading ? "Backfilling..." : "Backfill Folder Users"}
-              </Button>
-              {backfillMessage && (
-                <Box sx={{ mt: 2, color: mutedText }}>{backfillMessage}</Box>
-              )}
-            </AccordionDetails>
-          </Accordion>
+
+          <AdvancedSection
+            subtleBorder={subtleBorder}
+            cardBg={cardBg}
+            mutedText={mutedText}
+            backfillLoading={backfillLoading}
+            backfillMessage={backfillMessage}
+            onBackfill={backfillFolderUsers}
+          />
         </Container>
       ) : (
         <Container sx={{ color: "text.secondary" }}>
