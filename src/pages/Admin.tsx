@@ -35,6 +35,12 @@ export default function Admin() {
   const [folderUsers, setFolderUsers] = useState<FolderUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [allUsers, setAllUsers] = useState<FolderUser[]>([]);
+  const [allUsersLoading, setAllUsersLoading] = useState(false);
+  const [allUsersError, setAllUsersError] = useState<string | null>(null);
+  const [assignFolderId, setAssignFolderId] = useState("");
+  const [selectedAssignableUser, setSelectedAssignableUser] = useState<FolderUser | null>(null);
+  const [addUserLoading, setAddUserLoading] = useState(false);
   const [bannedUsers, setBannedUsers] = useState<FolderUser[]>([]);
   const [bannedLoading, setBannedLoading] = useState(false);
   const [bannedError, setBannedError] = useState<string | null>(null);
@@ -71,8 +77,29 @@ export default function Admin() {
     setFolders(withDefault);
   };
 
+  const loadAllUsers = async () => {
+    if (!apiBase) return;
+    setAllUsersLoading(true);
+    setAllUsersError(null);
+    try {
+      const res = await authFetch(`${apiBase}/users`, { method: "GET" });
+      if (!res.ok) {
+        throw new Error(`Failed to load users: ${res.status}`);
+      }
+      const payload = await res.json();
+      const users: FolderUser[] = Array.isArray(payload.users) ? payload.users : [];
+      setAllUsers(users);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load users.";
+      setAllUsersError(message);
+    } finally {
+      setAllUsersLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadFolders().catch(() => undefined);
+    loadAllUsers().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -86,6 +113,12 @@ export default function Admin() {
     setItemsMoveTarget(nextTarget);
     setItemsPage(1);
   }, [folders, selectedFolder]);
+
+  useEffect(() => {
+    if (selectedFolder && selectedFolder !== "public") {
+      setAssignFolderId(selectedFolder);
+    }
+  }, [selectedFolder]);
 
   const loadFolderItems = async (folderIdToLoad: string) => {
     if (!apiBase) return;
@@ -450,6 +483,47 @@ export default function Admin() {
     }
   };
 
+  const addUserToFolder = async () => {
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+    if (!selectedAssignableUser?.username) {
+      setStatusMessage("Select a user to add.");
+      return;
+    }
+    if (!assignFolderId) {
+      setStatusMessage("Select a destination folder.");
+      return;
+    }
+
+    setStatusMessage(null);
+    setAddUserLoading(true);
+    try {
+      const res = await authFetch(`${apiBase}/folder-users-add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          folderId: assignFolderId,
+          username: selectedAssignableUser.username,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Failed to add user.");
+      }
+      setStatusMessage(`Added ${selectedAssignableUser.username} to ${assignFolderId}.`);
+      if (selectedFolder === assignFolderId) {
+        loadFolderUsers(assignFolderId).catch(() => undefined);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add user.";
+      setStatusMessage(message);
+    } finally {
+      setAddUserLoading(false);
+    }
+  };
+
   useEffect(() => {
     selectedFolderRef.current = selectedFolder;
   }, [selectedFolder]);
@@ -505,6 +579,7 @@ export default function Admin() {
                 setSelectedFolder(folderIdToSelect);
                 setInviteFolderId(folderIdToSelect);
                 setUploadFolderId(folderIdToSelect);
+                setAssignFolderId(folderIdToSelect);
                 createInvite(folderIdToSelect, true);
               }}
               onDeleteFolder={deleteFolder}
@@ -577,12 +652,22 @@ export default function Admin() {
                   bannedUsers={bannedUsers}
                   usersLoading={usersLoading}
                   usersError={usersError}
+                  allUsers={allUsers}
+                  allUsersLoading={allUsersLoading}
+                  allUsersError={allUsersError}
+                  folders={folders}
+                  assignFolderId={assignFolderId}
+                  selectedAssignableUser={selectedAssignableUser}
                   bannedLoading={bannedLoading}
                   bannedError={bannedError}
                   userActionKey={userActionKey}
+                  addUserLoading={addUserLoading}
                   mutedText={mutedText}
                   subtleBorder={subtleBorder}
                   cardBg={cardBg}
+                  onAssignFolderChange={setAssignFolderId}
+                  onAssignableUserChange={setSelectedAssignableUser}
+                  onAddUserToFolder={addUserToFolder}
                   onRemoveUser={removeFolderUser}
                   onUnbanUser={unbanFolderUser}
                 />

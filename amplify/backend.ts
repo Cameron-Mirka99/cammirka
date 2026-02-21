@@ -19,6 +19,7 @@ import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
+import { addFolderUser } from "./functions/addFolderUser/resource.js";
 import { backfillFolderUsers } from "./functions/backfillFolderUsers/resource.js";
 import { createFolder } from "./functions/createFolder/resource.js";
 import { createInvite } from "./functions/createInvite/resource.js";
@@ -27,6 +28,7 @@ import { deletePhoto } from "./functions/deletePhoto/resource.js";
 import { duplicatePhoto } from "./functions/duplicatePhoto/resource.js";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
 import { listUserFolders } from "./functions/listUserFolders/resource.js";
+import { listAllUsers } from "./functions/listAllUsers/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
 import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
@@ -38,6 +40,7 @@ import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js
 const backend = defineBackend({
   auth,
   acceptInvite,
+  addFolderUser,
   backfillFolderUsers,
   createFolder,
   createInvite,
@@ -45,6 +48,7 @@ const backend = defineBackend({
   deletePhoto,
   duplicatePhoto,
   getPhotoList,
+  listAllUsers,
   listUserFolders,
   listFolders,
   listFolderUsers,
@@ -208,6 +212,10 @@ backend.listFolderUsers.addEnvironment(
   "BANNED_USERS_TABLE_NAME",
   bannedFolderUsersTable.tableName,
 );
+backend.listAllUsers.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
 backend.listUserFolders.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
@@ -219,6 +227,14 @@ backend.listUserFolders.addEnvironment(
 backend.removeFolderUser.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
+);
+backend.addFolderUser.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
+backend.addFolderUser.addEnvironment(
+  "BANNED_USERS_TABLE_NAME",
+  bannedFolderUsersTable.tableName,
 );
 backend.removeFolderUser.addEnvironment(
   "BANNED_USERS_TABLE_NAME",
@@ -242,11 +258,13 @@ folderUsersTable.grantReadWriteData(backend.backfillFolderUsers.resources.lambda
 folderUsersTable.grantReadData(backend.listUserFolders.resources.lambda);
 folderUsersTable.grantReadData(backend.getPhotoList.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lambda);
+folderUsersTable.grantReadWriteData(backend.addFolderUser.resources.lambda);
 foldersTable.grantReadData(backend.listUserFolders.resources.lambda);
 bannedFolderUsersTable.grantReadData(backend.acceptInvite.resources.lambda);
 bannedFolderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
 bannedFolderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lambda);
 bannedFolderUsersTable.grantReadWriteData(backend.unbanFolderUser.resources.lambda);
+bannedFolderUsersTable.grantReadWriteData(backend.addFolderUser.resources.lambda);
 
 backend.acceptInvite.resources.lambda.addToRolePolicy(
   new PolicyStatement({
@@ -266,6 +284,13 @@ backend.listFolderUsers.resources.lambda.addToRolePolicy(
 );
 
 backend.backfillFolderUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:ListUsers"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.listAllUsers.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ["cognito-idp:ListUsers"],
     resources: [backend.auth.resources.userPool.userPoolArn],
@@ -353,6 +378,15 @@ folderUsersResource.addMethod("GET", listFolderUsersIntegration, {
   authorizer,
 });
 
+const listAllUsersIntegration = new LambdaIntegration(
+  backend.listAllUsers.resources.lambda,
+);
+const usersResource = restApi.root.addResource("users");
+usersResource.addMethod("GET", listAllUsersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
 const listUserFoldersIntegration = new LambdaIntegration(
   backend.listUserFolders.resources.lambda,
 );
@@ -367,6 +401,15 @@ const removeFolderUserIntegration = new LambdaIntegration(
 );
 const removeFolderUserResource = restApi.root.addResource("folder-users-remove");
 removeFolderUserResource.addMethod("POST", removeFolderUserIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const addFolderUserIntegration = new LambdaIntegration(
+  backend.addFolderUser.resources.lambda,
+);
+const addFolderUserResource = restApi.root.addResource("folder-users-add");
+addFolderUserResource.addMethod("POST", addFolderUserIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
