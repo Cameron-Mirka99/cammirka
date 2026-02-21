@@ -1,6 +1,6 @@
 import { Box, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { Header } from "../components/Header";
 import { Photo } from "../types/photo";
@@ -42,6 +42,8 @@ export default function Admin() {
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [userActionKey, setUserActionKey] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderSummary[]>([]);
+  const folderItemsRequestSeq = useRef(0);
+  const selectedFolderRef = useRef<string | null>(null);
   const itemsPerPage = 10;
 
   const theme = useTheme();
@@ -87,6 +89,7 @@ export default function Admin() {
 
   const loadFolderItems = async (folderIdToLoad: string) => {
     if (!apiBase) return;
+    const requestSeq = ++folderItemsRequestSeq.current;
     setItemsLoading(true);
     setItemsError(null);
     try {
@@ -99,13 +102,29 @@ export default function Admin() {
         throw new Error(`Failed to load folder items: ${res.status}`);
       }
       const payload = await res.json();
-      const items: Photo[] = Array.isArray(payload.photos) ? payload.photos : [];
-      setFolderItems(items);
+      const rawItems: Photo[] = Array.isArray(payload.photos) ? payload.photos : [];
+      const folderPrefix = `${folderIdToLoad.replace(/^\/+|\/+$/g, "")}/`;
+      const itemsInFolder = rawItems.filter(
+        (item) =>
+          typeof item?.key === "string" &&
+          item.key.startsWith(folderPrefix) &&
+          !item.key.slice(folderPrefix.length).includes("/"),
+      );
+      const uniqueItems = Array.from(
+        new Map(itemsInFolder.map((item) => [item.key, item])).values(),
+      );
+      if (requestSeq !== folderItemsRequestSeq.current) return;
+      if (selectedFolderRef.current !== folderIdToLoad) return;
+      setFolderItems(uniqueItems);
       setItemsPage(1);
     } catch (err) {
+      if (requestSeq !== folderItemsRequestSeq.current) return;
+      if (selectedFolderRef.current !== folderIdToLoad) return;
       const message = err instanceof Error ? err.message : "Failed to load items.";
       setItemsError(message);
     } finally {
+      if (requestSeq !== folderItemsRequestSeq.current) return;
+      if (selectedFolderRef.current !== folderIdToLoad) return;
       setItemsLoading(false);
     }
   };
@@ -432,7 +451,16 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    if (!selectedFolder) return;
+    selectedFolderRef.current = selectedFolder;
+  }, [selectedFolder]);
+
+  useEffect(() => {
+    folderItemsRequestSeq.current += 1;
+    setFolderItems([]);
+    if (!selectedFolder) {
+      setItemsLoading(false);
+      return;
+    }
     loadFolderItems(selectedFolder).catch(() => undefined);
   }, [selectedFolder]);
 

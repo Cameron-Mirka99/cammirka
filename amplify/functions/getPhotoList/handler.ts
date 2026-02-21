@@ -124,6 +124,7 @@ export const handler = async (
         scanned++;
         if (scanned > MAX_SCAN) break;
         if (!obj.Key || obj.Size === 0 || excludeSet.has(obj.Key)) continue;
+        if (!isDirectFolderObjectKey(obj.Key, folderId)) continue;
 
         eligibleCount++;
 
@@ -199,6 +200,14 @@ function sanitizeFolderId(value?: string) {
   if (!trimmed) return null;
   if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
   return trimmed;
+}
+
+function isDirectFolderObjectKey(key: string, folderId: string) {
+  const prefix = `${folderId}/`;
+  if (!key.startsWith(prefix)) return false;
+  const remainder = key.slice(prefix.length);
+  if (!remainder) return false;
+  return !remainder.includes("/");
 }
 
 async function isUserInFolder(username: string, folderId: string) {

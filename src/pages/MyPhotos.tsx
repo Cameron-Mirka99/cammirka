@@ -1,6 +1,6 @@
 import { Box, Button, Container, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MainImageDisplay } from "../components/MainImageDisplay";
 import { Header } from "../components/Header";
 import { useAuth } from "../auth/AuthProvider";
@@ -30,6 +30,9 @@ export default function MyPhotos() {
     [],
   );
   const [userFoldersLoading, setUserFoldersLoading] = useState(false);
+  const photosRequestSeq = useRef(0);
+  const photosAbortRef = useRef<AbortController | null>(null);
+  const activeFolderRef = useRef<string | undefined>(undefined);
 
   let columnsCount = 1;
   if (isLg) {
@@ -42,6 +45,11 @@ export default function MyPhotos() {
     () => Boolean(user?.groups.includes("admin")),
     [user?.groups],
   );
+
+  const setActiveFolder = useCallback((folderId: string | undefined) => {
+    activeFolderRef.current = folderId;
+    setActiveFolderId(folderId);
+  }, []);
 
   const loadFolders = useCallback(async () => {
     if (!photoApiBaseUrl || !isAdmin) return;
@@ -88,8 +96,12 @@ export default function MyPhotos() {
     if (activeFolderId && selectable.some((folder) => folder.folderId === activeFolderId)) {
       return;
     }
-    setActiveFolderId(selectable[0].folderId);
-  }, [isAdmin, folders, userFolders, activeFolderId]);
+    setActiveFolder(selectable[0].folderId);
+  }, [isAdmin, folders, userFolders, activeFolderId, setActiveFolder]);
+
+  useEffect(() => {
+    activeFolderRef.current = activeFolderId;
+  }, [activeFolderId]);
 
   const fetchPhotos = useCallback(
     async (excludeKeys: string[] = [], limit = 200) => {
@@ -97,14 +109,20 @@ export default function MyPhotos() {
         throw new Error("REACT_APP_PHOTO_API_URL is not configured");
       }
 
+      const requestedFolderId = activeFolderId;
+      const requestSeq = ++photosRequestSeq.current;
+      photosAbortRef.current?.abort();
+      const controller = new AbortController();
+      photosAbortRef.current = controller;
       const body: Record<string, unknown> = { excludeKeys, limit };
-      if (activeFolderId) {
-        body.folderId = activeFolderId;
+      if (requestedFolderId) {
+        body.folderId = requestedFolderId;
       }
 
       const res = await authFetch(`${photoApiBaseUrl}/photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify(body),
       });
 
@@ -114,10 +132,28 @@ export default function MyPhotos() {
 
       const data = await res.json();
       const incoming: Photo[] = Array.isArray(data.photos) ? data.photos : [];
+      const folderPrefix = requestedFolderId
+        ? `${requestedFolderId.replace(/^\/+|\/+$/g, "")}/`
+        : null;
+      const folderScoped = folderPrefix
+        ? incoming.filter(
+            (photo) =>
+              photo?.key?.startsWith(folderPrefix) &&
+              !photo.key.slice(folderPrefix.length).includes("/"),
+          )
+        : incoming;
+      const dedupedIncoming = Array.from(
+        new Map(folderScoped.map((photo) => [photo.key, photo])).values(),
+      );
+      if (requestSeq !== photosRequestSeq.current) return;
+      if (activeFolderRef.current !== requestedFolderId) return;
 
       setPhotos((prev) => {
+        if (excludeKeys.length === 0) {
+          return dedupedIncoming;
+        }
         const existingKeys = new Set(prev.map((p) => p.key));
-        const filtered = incoming.filter((p) => !existingKeys.has(p.key));
+        const filtered = dedupedIncoming.filter((p) => !existingKeys.has(p.key));
         return [...prev, ...filtered];
       });
     },
@@ -132,19 +168,32 @@ export default function MyPhotos() {
       return;
     }
     if (!activeFolderId) {
+      photosRequestSeq.current += 1;
+      photosAbortRef.current?.abort();
+      photosAbortRef.current = null;
+      setPhotos([]);
       setLoading(false);
       return;
     }
 
+    photosRequestSeq.current += 1;
     setLoading(true);
     setPhotos([]);
     fetchPhotos([], 200)
       .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
         // eslint-disable-next-line no-console
         console.error("Failed to fetch photos:", err);
       })
       .finally(() => setLoading(false));
   }, [status, user?.folderId, fetchPhotos, isAdmin, activeFolderId]);
+
+  useEffect(
+    () => () => {
+      photosAbortRef.current?.abort();
+    },
+    [],
+  );
 
   if (status === "loading") {
     return (
@@ -257,7 +306,7 @@ export default function MyPhotos() {
                   {(isAdmin ? folders : userFolders).map((folder) => (
                     <Box
                       key={folder.folderId}
-                      onClick={() => setActiveFolderId(folder.folderId)}
+                      onClick={() => setActiveFolder(folder.folderId)}
                       sx={{
                         padding: "6px 10px",
                         borderRadius: 1,
