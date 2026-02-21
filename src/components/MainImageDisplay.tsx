@@ -95,10 +95,14 @@ export const MainImageDisplay = ({ photos, columnsCount, loading: loadingProp }:
   useEffect(() => {
     let mounted = true;
 
-    const newPhotos = getNewPhotos(photos, prevKeysRef.current);
+    const incomingKeys = new Set(photos.map((p) => p.key));
+    const seenKeys = prevKeysRef.current;
+    const hasSameKeys =
+      incomingKeys.size === seenKeys.size &&
+      Array.from(incomingKeys).every((key) => seenKeys.has(key));
 
-    if (newPhotos.length === 0) {
-      if (photos.length > 0 && prevKeysRef.current.size === 0) {
+    if (hasSameKeys) {
+      if (photos.length > 0 && seenKeys.size === 0) {
         setLoading(false);
       }
       return () => {
@@ -106,25 +110,27 @@ export const MainImageDisplay = ({ photos, columnsCount, loading: loadingProp }:
       };
     }
 
+    const newPhotos = getNewPhotos(photos, seenKeys);
+
     const run = async () => {
-      if (prevKeysRef.current.size === 0) {
+      if (seenKeys.size === 0) {
         setLoading(true);
       }
 
-      if (spinnerUntilStart && prevKeysRef.current.size === 0) {
+      if (spinnerUntilStart && seenKeys.size === 0) {
         setSpinnerUntilStart(false);
       }
 
-      if (prevKeysRef.current.size === 0) {
+      if (seenKeys.size === 0) {
         const firstBatch = getFirstBatchPhotos(newPhotos, columnsCount);
         await preloadPhotoBatch(firstBatch);
       }
 
       if (!mounted) return;
 
-      setVisiblePhotos((prev) => [...prev, ...shufflePhotos(newPhotos)]);
+      setVisiblePhotos(shufflePhotos(photos));
       setLoading(false);
-      prevKeysRef.current = new Set(photos.map((p) => p.key));
+      prevKeysRef.current = incomingKeys;
     };
 
     run();
