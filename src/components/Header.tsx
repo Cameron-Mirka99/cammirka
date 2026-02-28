@@ -147,6 +147,11 @@ export const Header = ({...props}) => {
                 <MenuItem component={Link} to="/about" onClick={() => setNavAnchor(null)}>
                   About
                 </MenuItem>
+                {isAdmin && (
+                  <MenuItem component={Link} to="/purchase" onClick={() => setNavAnchor(null)}>
+                    Purchase
+                  </MenuItem>
+                )}
                 {isSignedIn && (
                   <MenuItem component={Link} to="/my-photos" onClick={() => setNavAnchor(null)}>
                     My Photos
@@ -203,6 +208,51 @@ export const Header = ({...props}) => {
               >
                 About
               </Button>
+
+              {isAdmin && (
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/purchase"
+                  sx={{
+                    fontSize: { xs: 'clamp(0.9rem, 3vw, 1.3rem)', sm: 'clamp(0.95rem, 3vw, 1.3rem)', md: 'clamp(1rem, 3vw, 1.3rem)' },
+                    padding: { xs: '8px 16px', sm: '10px 24px', md: '12px 32px' },
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    position: 'relative',
+                    border: 'none',
+                    background: isActive('/purchase') ? 'rgba(255, 179, 0, 0.28)' : (isLight ? 'rgba(255, 179, 0, 0.16)' : 'rgba(255, 179, 0, 0.1)'),
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    overflow: 'hidden',
+                    borderRadius: '4px',
+                    boxShadow: isActive('/purchase') ? '0 10px 28px rgba(255, 179, 0, 0.2)' : 'none',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: '0',
+                      left: '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)',
+                      transition: 'left 0.3s ease',
+                    },
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 179, 0, 0.2)',
+                      boxShadow: '0 8px 24px rgba(255, 179, 0, 0.15)',
+                      transform: 'translateY(-2px)',
+                      '&::before': {
+                        left: '100%',
+                      }
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                    }
+                  }}
+                >
+                  Purchase
+                </Button>
+              )}
 
               {isSignedIn && (
                 <Button

@@ -4,6 +4,7 @@ import { Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home";
 import About from "./pages/About";
+import Purchase from "./pages/Purchase";
 import Login from "./pages/Login";
 import MyPhotos from "./pages/MyPhotos";
 import Admin from "./pages/Admin";
@@ -89,6 +90,14 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<About />} />
+            <Route
+              path="/purchase"
+              element={
+                <RequireAdmin>
+                  <Purchase />
+                </RequireAdmin>
+              }
+            />
             <Route path="/login" element={<Login />} />
             <Route
               path="/my-photos"
