@@ -40,13 +40,13 @@ export const Header = () => {
   const [navAnchor, setNavAnchor] = React.useState<null | HTMLElement>(null);
   const accountOpen = Boolean(accountMenuPosition);
   const navOpen = Boolean(navAnchor);
-  const headerHeight = overlayMode ? { xs: 88, md: 96 } : { xs: 82, md: 90 };
+  const headerHeight = { xs: 88, md: 96 };
 
   const navColor = overlayMode ? "#F7F1E3" : theme.palette.text.primary;
   const mutedColor = overlayMode ? alpha("#F7F1E3", 0.72) : theme.palette.text.secondary;
   const appBarBackground = overlayMode
     ? "transparent"
-    : alpha(theme.palette.background.default, theme.palette.mode === "light" ? 0.84 : 0.78);
+    : alpha(theme.palette.background.default, theme.palette.mode === "light" ? 0.94 : 0.92);
   const appBarBorder = overlayMode
     ? "transparent"
     : alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.12);
@@ -68,9 +68,8 @@ export const Header = () => {
         color="transparent"
         sx={{
           backgroundColor: appBarBackground,
-          backdropFilter: overlayMode ? "none" : "blur(18px)",
           borderBottom: `1px solid ${appBarBorder}`,
-          transition: "background-color 220ms ease, border-color 220ms ease, backdrop-filter 220ms ease",
+          transition: "background-color 220ms ease, border-color 220ms ease",
         }}
       >
         <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 } }}>
@@ -132,8 +131,7 @@ export const Header = () => {
                       minWidth: 220,
                       borderRadius: 3,
                       border: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
-                      backgroundColor: alpha(theme.palette.background.paper, 0.96),
-                      backdropFilter: "blur(20px)",
+                      backgroundColor: alpha(theme.palette.background.paper, 0.98),
                     },
                   }}
                 >
@@ -269,7 +267,7 @@ export const Header = () => {
         </Container>
       </AppBar>
 
-      {!overlayMode && <Toolbar sx={{ minHeight: headerHeight }} />}
+      <Toolbar sx={{ minHeight: headerHeight, pointerEvents: "none" }} />
 
       <Menu
         anchorReference="anchorPosition"
@@ -282,8 +280,7 @@ export const Header = () => {
             minWidth: 220,
             borderRadius: 3,
             border: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
-            backgroundColor: alpha(theme.palette.background.paper, 0.96),
-            backdropFilter: "blur(18px)",
+            backgroundColor: alpha(theme.palette.background.paper, 0.98),
           },
         }}
       >

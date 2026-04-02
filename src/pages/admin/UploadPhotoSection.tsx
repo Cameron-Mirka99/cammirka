@@ -25,6 +25,10 @@ export function UploadPhotoSection({
       <Typography sx={{ mb: 2, color: mutedText }}>
         Example: folder ID <strong>client-jones</strong>, file <strong>IMG_1234.jpg</strong>
       </Typography>
+      <Typography sx={{ mb: 2, color: mutedText, fontSize: "0.92rem" }}>
+        Each selected file is uploaded once as the full image and once as a smaller thumbnail generated in your
+        browser.
+      </Typography>
       <Box
         sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}
       >

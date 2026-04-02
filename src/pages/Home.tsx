@@ -60,6 +60,7 @@ function Home() {
 
       <Box
         sx={{
+          mt: { xs: "-88px", md: "-96px" },
           minHeight: { xs: "100svh", md: "96svh" },
           display: "flex",
           alignItems: "flex-end",
@@ -174,8 +175,7 @@ function Home() {
         sx={{
           borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
           borderBottom: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
-          backgroundColor: alpha(theme.palette.background.paper, 0.76),
-          backdropFilter: "blur(10px)",
+          backgroundColor: alpha(theme.palette.background.paper, 0.92),
         }}
       >
         <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 4 } }}>

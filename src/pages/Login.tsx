@@ -1,6 +1,6 @@
-import { Authenticator } from "@aws-amplify/ui-react";
+import { Authenticator, ThemeProvider, type Theme } from "@aws-amplify/ui-react";
 import { Box, Container, Typography } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { alpha, useTheme as useMuiTheme } from "@mui/material/styles";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
@@ -13,6 +13,36 @@ export default function Login() {
   const navigate = useNavigate();
   const { status, refresh } = useAuth();
   const [message, setMessage] = useState<string | null>(null);
+  const muiTheme = useMuiTheme();
+  const authTheme: Theme = {
+    name: "cammirka-auth",
+    tokens: {
+      components: {
+        tabs: {
+          item: {
+            color: { value: muiTheme.palette.text.secondary },
+            _hover: {
+              color: { value: muiTheme.palette.primary.light },
+              borderColor: { value: alpha(muiTheme.palette.primary.main, 0.5) },
+            },
+            _focus: {
+              color: { value: muiTheme.palette.primary.main },
+              borderColor: { value: muiTheme.palette.primary.main },
+            },
+            _active: {
+              color: { value: muiTheme.palette.primary.main },
+              borderColor: { value: muiTheme.palette.primary.main },
+            },
+          },
+        },
+        button: {
+          link: {
+            color: { value: muiTheme.palette.primary.main },
+          },
+        },
+      },
+    },
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -163,9 +193,36 @@ export default function Login() {
                   border: "none",
                   backgroundColor: "transparent",
                   boxShadow: "none",
+                  "--amplify-colors-font-interactive": (theme) => theme.palette.primary.main,
+                  "--amplify-colors-font-hover": (theme) => theme.palette.primary.light,
+                  "--amplify-colors-font-focus": (theme) => theme.palette.primary.main,
+                  "--amplify-colors-primary-80": (theme) => theme.palette.primary.main,
+                  "--amplify-colors-primary-60": (theme) => theme.palette.primary.light,
+                  "--amplify-colors-primary-90": (theme) => theme.palette.primary.dark,
+                  "--amplify-colors-border-focus": (theme) => alpha(theme.palette.primary.main, 0.42),
+                  "--amplify-components-tabs-item-active-color": (theme) => theme.palette.primary.main,
+                  "--amplify-components-tabs-item-active-border-color": (theme) => theme.palette.primary.main,
+                  "--amplify-components-tabs-item-hover-color": (theme) => theme.palette.primary.light,
+                  "--amplify-components-tabs-item-hover-border-color": (theme) =>
+                    alpha(theme.palette.primary.main, 0.5),
+                  "--amplify-components-button-link-color": (theme) => theme.palette.primary.main,
                 },
                 "& [data-amplify-container]": {
                   backgroundColor: "transparent",
+                },
+                "& [data-amplify-router], & .amplify-authenticator__router": {
+                  backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.78),
+                  border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+                  boxShadow: "none",
+                },
+                "& [data-amplify-form], & .amplify-flex, & form": {
+                  backgroundColor: "transparent",
+                },
+                "& .amplify-field": {
+                  color: "text.primary",
+                },
+                "& .amplify-label, & .amplify-field__show-password": {
+                  color: "text.secondary",
                 },
                 "& .amplify-tabs": {
                   borderColor: (theme) => alpha(theme.palette.text.primary, 0.08),
@@ -175,15 +232,55 @@ export default function Login() {
                   fontWeight: 700,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
+                  fontSize: "0.82rem",
                 },
                 "& .amplify-tabs-item[data-state='active']": {
                   color: "primary.main",
                   borderColor: "primary.main",
                 },
+                "& .amplify-tabs-item:hover": {
+                  color: "primary.main",
+                },
+                "& .amplify-tabs-item:visited, & .amplify-tabs-item:focus": {
+                  color: "primary.main",
+                },
+                "& .amplify-tabs-item[data-state='active']::after": {
+                  backgroundColor: "primary.main",
+                },
+                "& .amplify-heading": {
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontWeight: 600,
+                  letterSpacing: "-0.02em",
+                  lineHeight: 1.02,
+                  color: "text.primary",
+                },
+                "& .amplify-heading[data-size='large']": {
+                  fontSize: { xs: "2rem", md: "2.5rem" },
+                },
+                "& .amplify-text[style], & .amplify-text": {
+                  color: "text.secondary",
+                },
                 "& .amplify-field-group__control, & .amplify-select": {
                   borderRadius: "16px",
                   borderColor: (theme) => alpha(theme.palette.text.primary, 0.12),
                   backgroundColor: (theme) => alpha(theme.palette.background.default, 0.72),
+                },
+                "& .amplify-input, & .amplify-select select": {
+                  color: "text.primary",
+                  backgroundColor: "transparent",
+                  caretColor: "currentColor",
+                },
+                "& .amplify-input::placeholder": {
+                  color: (theme) => alpha(theme.palette.text.secondary, 0.82),
+                },
+                "& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus": {
+                  WebkitTextFillColor: (theme) => theme.palette.text.primary,
+                  WebkitBoxShadow: (theme) =>
+                    `0 0 0 100px ${alpha(theme.palette.background.default, 0.9)} inset`,
+                  transition: "background-color 9999s ease-in-out 0s",
+                },
+                "& .amplify-field-group__outer-end button": {
+                  color: "text.secondary",
                 },
                 "& .amplify-button--primary": {
                   borderRadius: "999px",
@@ -196,9 +293,14 @@ export default function Login() {
                 "& .amplify-button--link, & .amplify-text": {
                   color: "text.secondary",
                 },
+                "& .amplify-tabs-item, & .amplify-button--link": {
+                  transition: "color 180ms ease, border-color 180ms ease",
+                },
               }}
             >
-              <Authenticator />
+              <ThemeProvider theme={authTheme}>
+                <Authenticator />
+              </ThemeProvider>
             </Box>
           </Box>
         </Box>

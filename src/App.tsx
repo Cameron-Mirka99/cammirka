@@ -52,7 +52,7 @@ function App() {
               isLight
                 ? `radial-gradient(circle, ${alpha("#B88A2A", 0.12)} 0%, transparent 70%)`
                 : `radial-gradient(circle, ${alpha("#B88A2A", 0.14)} 0%, transparent 70%)`,
-            filter: "blur(56px)",
+            opacity: 0.9,
           }}
         />
         <Box
@@ -69,7 +69,7 @@ function App() {
               isLight
                 ? `radial-gradient(circle, ${alpha("#7F8A78", 0.12)} 0%, transparent 70%)`
                 : `radial-gradient(circle, ${alpha("#7F8A78", 0.1)} 0%, transparent 70%)`,
-            filter: "blur(52px)",
+            opacity: 0.85,
           }}
         />
       </Box>

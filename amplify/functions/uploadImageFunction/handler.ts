@@ -6,7 +6,6 @@ import {
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import sharp from "sharp";
 import {
   buildCanonicalPhotoKey,
   buildFullPhotoKey,
@@ -65,6 +64,7 @@ export const handler = async (
     const results = await Promise.all(
       uploads.map(async (upload) => {
         let imageBuffer: Buffer;
+        let thumbnailBuffer: Buffer | null = null;
         try {
           imageBuffer = Buffer.from(upload.image, "base64");
         } catch {
@@ -75,12 +75,23 @@ export const handler = async (
           };
         }
 
+        if (upload.thumbnailImage) {
+          try {
+            thumbnailBuffer = Buffer.from(upload.thumbnailImage, "base64");
+          } catch {
+            thumbnailBuffer = null;
+          }
+        }
+
         const canonicalKey = buildCanonicalPhotoKey(folderId, upload.imageName);
         const fullKey = buildFullPhotoKey(folderId, upload.imageName);
         const thumbnailKey = buildThumbnailPhotoKey(folderId, upload.imageName);
         const contentType =
           guessContentType(upload.imageName) || "application/octet-stream";
-        const thumbnail = await createThumbnail(imageBuffer, contentType);
+        const thumbnail = await createThumbnail(
+          thumbnailBuffer ?? imageBuffer,
+          upload.thumbnailContentType || contentType,
+        );
 
         const putFullCommand = new PutObjectCommand({
           Bucket: BUCKET_NAME,
@@ -148,7 +159,14 @@ function parseBody(event: APIGatewayProxyEvent) {
 function normalizeUploads(body: {
   image?: string;
   imageName?: string;
-  images?: Array<{ image?: string; imageName?: string }>;
+  thumbnailImage?: string;
+  thumbnailContentType?: string;
+  images?: Array<{
+    image?: string;
+    imageName?: string;
+    thumbnailImage?: string;
+    thumbnailContentType?: string;
+  }>;
 }) {
   if (!body) return [];
   if (Array.isArray(body.images)) {
@@ -157,13 +175,28 @@ function normalizeUploads(body: {
         image: typeof entry?.image === "string" ? entry.image : "",
         imageName:
           typeof entry?.imageName === "string" ? entry.imageName.trim() : "",
+        thumbnailImage:
+          typeof entry?.thumbnailImage === "string" ? entry.thumbnailImage : "",
+        thumbnailContentType:
+          typeof entry?.thumbnailContentType === "string"
+            ? entry.thumbnailContentType
+            : "",
       }))
       .filter((entry) => entry.image && entry.imageName);
   }
   if (typeof body.image === "string" && typeof body.imageName === "string") {
     const imageName = body.imageName.trim();
     if (!imageName) return [];
-    return [{ image: body.image, imageName }];
+    return [{
+      image: body.image,
+      imageName,
+      thumbnailImage:
+        typeof body.thumbnailImage === "string" ? body.thumbnailImage : "",
+      thumbnailContentType:
+        typeof body.thumbnailContentType === "string"
+          ? body.thumbnailContentType
+          : "",
+    }];
   }
   return [];
 }
@@ -219,34 +252,8 @@ async function createThumbnail(
   imageBuffer: Buffer,
   contentType: string,
 ): Promise<{ buffer: Buffer; contentType: string }> {
-  // Keep GIF uploads functional for now without attempting animated resizing.
-  if (contentType === "image/gif") {
-    return { buffer: imageBuffer, contentType };
-  }
-
-  const pipeline = sharp(imageBuffer, { failOn: "none" }).rotate().resize({
-    width: THUMBNAIL_MAX_WIDTH,
-    withoutEnlargement: true,
-  });
-
-  if (contentType === "image/png") {
-    return {
-      buffer: await pipeline.png({ compressionLevel: 9 }).toBuffer(),
-      contentType: "image/png",
-    };
-  }
-
-  if (contentType === "image/webp") {
-    return {
-      buffer: await pipeline.webp({ quality: 78 }).toBuffer(),
-      contentType: "image/webp",
-    };
-  }
-
-  return {
-    buffer: await pipeline.jpeg({ quality: 78, mozjpeg: true }).toBuffer(),
-    contentType: "image/jpeg",
-  };
+  void THUMBNAIL_MAX_WIDTH;
+  return { buffer: imageBuffer, contentType };
 }
 
 async function deleteObjectIfPresent(key: string) {
