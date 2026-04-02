@@ -101,7 +101,6 @@ export default function Login() {
             borderRadius: { xs: 4, md: 6 },
             overflow: "hidden",
             backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.76),
-            backdropFilter: "blur(20px)",
           }}
         >
           <Box

@@ -50,7 +50,6 @@ export function FolderItemsSection({
         borderRadius: 4,
         p: { xs: 2.5, md: 3 },
         backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.78),
-        backdropFilter: "blur(18px)",
       }}
     >
       <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
@@ -135,6 +134,8 @@ export function FolderItemsSection({
                     component="img"
                     src={item.thumbnailUrl ?? item.url}
                     alt={getFileName(item.key)}
+                    loading="lazy"
+                    decoding="async"
                     sx={{
                       width: 90,
                       height: 60,

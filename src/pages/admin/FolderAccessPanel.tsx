@@ -82,7 +82,6 @@ export function FolderAccessPanel({
         borderRadius: 4,
         p: 2.5,
         background: cardBg,
-        backdropFilter: "blur(18px)",
         maxHeight: { xl: "75vh" },
         overflowY: { xl: "auto" },
       }}

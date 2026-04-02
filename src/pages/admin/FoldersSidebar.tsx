@@ -34,7 +34,6 @@ export function FoldersSidebar({
         borderRadius: 4,
         padding: 2.5,
         background: cardBg,
-        backdropFilter: "blur(18px)",
         maxHeight: "78vh",
         overflowY: "auto",
       }}

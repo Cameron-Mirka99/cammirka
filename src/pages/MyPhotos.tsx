@@ -273,7 +273,6 @@ export default function MyPhotos() {
                 borderRadius: 4,
                 padding: { xs: 2, md: 2.5 },
                 background: panelBg,
-                backdropFilter: "blur(18px)",
                 maxHeight: "75vh",
                 overflowY: "auto",
               }}

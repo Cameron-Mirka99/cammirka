@@ -644,7 +644,6 @@ export default function Admin() {
                 setInviteFolderId(folderIdToSelect);
                 setUploadFolderId(folderIdToSelect);
                 setAssignFolderId(folderIdToSelect);
-                createInvite(folderIdToSelect, true);
               }}
               onDeleteFolder={deleteFolder}
               onSeedFolderId={setFolderId}
