@@ -51,7 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    let mounted = true;
     loadAuth();
 
     const cancel = Hub.listen("auth", () => {
@@ -59,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
-      mounted = false;
       if (typeof cancel === "function") {
         cancel();
       }

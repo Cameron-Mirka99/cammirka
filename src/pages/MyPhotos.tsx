@@ -1,6 +1,7 @@
-import { Box, Button, Container, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Button, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import { MainImageDisplay } from "../components/MainImageDisplay";
 import { Header } from "../components/Header";
 import { useAuth } from "../auth/AuthProvider";
@@ -11,13 +12,10 @@ import { Photo } from "../types/photo";
 export default function MyPhotos() {
   const { user, status } = useAuth();
   const theme = useTheme();
-  const isSm = useMediaQuery(theme.breakpoints.between("sm", "md"));
-  const isMd = useMediaQuery(theme.breakpoints.between("md", "lg"));
-  const isLg = useMediaQuery(theme.breakpoints.up("lg"));
   const mutedText = theme.palette.text.secondary;
-  const panelBorder = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.12 : 0.2);
-  const panelBg = alpha(theme.palette.common.black, theme.palette.mode === "light" ? 0.04 : 0.2);
-  const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.08);
+  const panelBorder = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.08 : 0.16);
+  const panelBg = alpha(theme.palette.background.paper, theme.palette.mode === "light" ? 0.82 : 0.78);
+  const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.045 : 0.08);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFolderId, setActiveFolderId] = useState<string | undefined>(
@@ -33,13 +31,6 @@ export default function MyPhotos() {
   const photosRequestSeq = useRef(0);
   const photosAbortRef = useRef<AbortController | null>(null);
   const activeFolderRef = useRef<string | undefined>(undefined);
-
-  let columnsCount = 1;
-  if (isLg) {
-    columnsCount = 3;
-  } else if (isMd || isSm) {
-    columnsCount = 2;
-  }
 
   const isAdmin = useMemo(
     () => Boolean(user?.groups.includes("admin")),
@@ -60,7 +51,7 @@ export default function MyPhotos() {
     const payload = await res.json();
     const items = Array.isArray(payload.folders) ? payload.folders : [];
     setFolders(items);
-  }, [isAdmin, photoApiBaseUrl]);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -186,7 +177,7 @@ export default function MyPhotos() {
         console.error("Failed to fetch photos:", err);
       })
       .finally(() => setLoading(false));
-  }, [status, user?.folderId, fetchPhotos, isAdmin, activeFolderId]);
+  }, [status, user?.folderId, fetchPhotos, isAdmin, activeFolderId, folders, userFolders, userFoldersLoading]);
 
   useEffect(
     () => () => {
@@ -197,7 +188,7 @@ export default function MyPhotos() {
 
   if (status === "loading") {
     return (
-      <Container sx={{ color: "text.secondary" }}>
+      <Container sx={{ color: "text.secondary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 6, md: 8 } }}>
         <Typography>Loading your session...</Typography>
       </Container>
     );
@@ -207,7 +198,7 @@ export default function MyPhotos() {
     return (
       <>
         <Header />
-        <Container sx={{ color: "text.secondary" }}>
+        <Container sx={{ color: "text.secondary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 6, md: 8 } }}>
           <Typography>Please sign in to view your photos.</Typography>
         </Container>
       </>
@@ -218,7 +209,7 @@ export default function MyPhotos() {
     return (
       <>
         <Header />
-        <Container sx={{ color: "text.secondary" }}>
+        <Container sx={{ color: "text.secondary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 6, md: 8 } }}>
           <Typography>
             Your account is not yet linked to a folder. Make sure you signed up
             with a valid invite link.
@@ -231,50 +222,40 @@ export default function MyPhotos() {
   return (
     <>
       <Header />
-      <Container maxWidth="xl" sx={{ pt: { xs: 2, sm: 3, md: 4 } }}>
-        <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
-          <Typography variant="h5" sx={{ color: "text.primary" }}>
-            My Photos
-          </Typography>
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}>
+        <Box
+          sx={{
+            mb: { xs: 3, md: 4 },
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 2,
+            flexWrap: "wrap",
+            alignItems: "end",
+            borderBottom: `1px solid ${panelBorder}`,
+            pb: { xs: 2.5, md: 3 },
+          }}
+        >
+          <Box sx={{ maxWidth: 620 }}>
+            <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+              Private Gallery
+            </Typography>
+            <Typography variant="h4" sx={{ color: "text.primary", fontSize: { xs: "2rem", md: "2.8rem" }, mb: 1 }}>
+              My Photos
+            </Typography>
+            <Typography sx={{ color: mutedText }}>
+              Access the folders assigned to your account and browse your archive without leaving the workspace.
+            </Typography>
+          </Box>
           <Button
-            variant="outlined"
-            href="/"
+            component={RouterLink}
+            to="/"
+            variant="text"
             sx={{
-              fontSize: { xs: "clamp(0.9rem, 3vw, 1.3rem)", sm: "clamp(0.95rem, 3vw, 1.3rem)", md: "clamp(1rem, 3vw, 1.3rem)" },
-              padding: { xs: "8px 16px", sm: "10px 24px", md: "12px 32px" },
-              textTransform: "uppercase",
-              fontWeight: 600,
-              letterSpacing: "0.5px",
-              position: "relative",
-              border: "none",
-              background: "rgba(255, 179, 0, 0.1)",
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              overflow: "hidden",
-              borderRadius: "4px",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: "0",
-                left: "-100%",
-                width: "100%",
-                height: "100%",
-                background: "linear-gradient(135deg, rgba(255, 179, 0, 0.2) 0%, transparent 100%)",
-                transition: "left 0.3s ease",
-              },
-              "&:hover": {
-                backgroundColor: "rgba(255, 179, 0, 0.2)",
-                boxShadow: "0 8px 24px rgba(255, 179, 0, 0.15)",
-                transform: "translateY(-2px)",
-                "&::before": {
-                  left: "100%",
-                },
-              },
-              "&:active": {
-                transform: "translateY(0)",
-              },
+              px: 0,
+              alignSelf: "flex-end",
             }}
           >
-            Back to Home
+            Return to public archive
           </Button>
         </Box>
 
@@ -282,22 +263,29 @@ export default function MyPhotos() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-              gap: 4,
+              gridTemplateColumns: { xs: "1fr", md: "300px minmax(0, 1fr)" },
+              gap: { xs: 3, md: 4 },
             }}
           >
             <Box
               sx={{
                 border: `1px solid ${panelBorder}`,
-                borderRadius: 2,
-                padding: 2,
+                borderRadius: 4,
+                padding: { xs: 2, md: 2.5 },
                 background: panelBg,
-                maxHeight: "70vh",
+                backdropFilter: "blur(18px)",
+                maxHeight: "75vh",
                 overflowY: "auto",
               }}
             >
-              <Typography variant="h6" sx={{ mb: 2, color: "text.primary" }}>
-                Choose a folder
+              <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+                Available Folders
+              </Typography>
+              <Typography variant="h6" sx={{ mb: 0.75, color: "text.primary", fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+                Select a workspace
+              </Typography>
+              <Typography sx={{ mb: 2.5, color: mutedText, fontSize: "0.92rem" }}>
+                Choose a folder to load its private gallery.
               </Typography>
               {(isAdmin ? folders : userFolders).length === 0 ? (
                 <Box sx={{ color: mutedText }}>No folders yet.</Box>
@@ -308,22 +296,24 @@ export default function MyPhotos() {
                       key={folder.folderId}
                       onClick={() => setActiveFolder(folder.folderId)}
                       sx={{
-                        padding: "6px 10px",
-                        borderRadius: 1,
+                        padding: "12px 14px",
+                        borderRadius: 3,
                         background:
                           activeFolderId === folder.folderId
-                            ? "rgba(255, 179, 0, 0.2)"
+                            ? alpha(theme.palette.primary.main, 0.12)
                             : itemBg,
-                        fontSize: "0.9rem",
                         cursor: "pointer",
                         border:
                           activeFolderId === folder.folderId
-                            ? "1px solid rgba(255, 179, 0, 0.5)"
-                            : "1px solid transparent",
+                            ? `1px solid ${alpha(theme.palette.primary.main, 0.32)}`
+                            : `1px solid ${alpha(theme.palette.text.primary, 0.05)}`,
+                        transition: "background-color 180ms ease, border-color 180ms ease",
                       }}
                     >
-                      {folder.displayName ?? folder.folderId}
-                      <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                      <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
+                        {folder.displayName ?? folder.folderId}
+                      </Box>
+                      <Box sx={{ fontSize: "0.74rem", color: mutedText, mt: 0.3, letterSpacing: "0.04em" }}>
                         {folder.folderId}
                       </Box>
                     </Box>
@@ -334,12 +324,7 @@ export default function MyPhotos() {
 
             <Box>
               {activeFolderId ? (
-                <MainImageDisplay
-                  key={activeFolderId}
-                  photos={photos}
-                  columnsCount={columnsCount}
-                  loading={loading}
-                />
+                <MainImageDisplay key={activeFolderId} photos={photos} loading={loading} variant="private" />
               ) : (
                 <Box sx={{ color: mutedText, mt: 2 }}>
                   Select a folder to view its gallery.
@@ -350,12 +335,7 @@ export default function MyPhotos() {
         ) : (
           <>
             {activeFolderId ? (
-              <MainImageDisplay
-                key={activeFolderId}
-                photos={photos}
-                columnsCount={columnsCount}
-                loading={loading}
-              />
+              <MainImageDisplay key={activeFolderId} photos={photos} loading={loading} variant="private" />
             ) : (
               <Box sx={{ color: mutedText, mt: 2 }}>
                 Select a folder to view its gallery.

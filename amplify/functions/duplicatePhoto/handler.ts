@@ -1,5 +1,14 @@
-import { CopyObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import {
+  encodeS3Key,
+  getManagedPhotoKeysFromStorageKey,
+  sanitizeFolderId,
+} from "../shared/photoPaths.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -33,24 +42,52 @@ export const handler = async (
       });
     }
 
-    const fileName = sourceKey.split("/").pop();
-    if (!fileName) {
+    const sourcePhoto = getManagedPhotoKeysFromStorageKey(sourceKey);
+    if (!sourcePhoto) {
       return response(400, { message: "Invalid sourceKey." });
     }
 
-    const destinationFileName = body?.destinationFileName?.trim() || fileName;
-    const destinationKey = `${destinationFolderId}/${destinationFileName}`;
-    const copySource = `${BUCKET_NAME}/${encodeKey(sourceKey)}`;
+    const destinationFileName = body?.destinationFileName?.trim() || sourcePhoto.fileName;
+    const destinationPhoto = getManagedPhotoKeysFromStorageKey(sourceKey, {
+      folderId: destinationFolderId,
+      fileName: destinationFileName,
+    });
+    if (!destinationPhoto) {
+      return response(400, { message: "Could not derive destination photo keys." });
+    }
 
-    await s3.send(
-      new CopyObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: destinationKey,
-        CopySource: copySource,
-      }),
-    );
+    let copiedFull = false;
+    let copiedThumbnail = false;
 
-    return response(200, { sourceKey, destinationKey });
+    if (sourcePhoto.isLegacy) {
+      await copyObject(sourcePhoto.legacyKey, destinationPhoto.legacyKey);
+      return response(200, {
+        sourceKey,
+        destinationKey: destinationPhoto.legacyKey,
+        duplicatedKeys: [destinationPhoto.legacyKey],
+      });
+    }
+
+    try {
+      await copyObject(sourcePhoto.fullKey, destinationPhoto.fullKey);
+      copiedFull = true;
+      copiedThumbnail = await copyOptionalObject(
+        sourcePhoto.thumbnailKey,
+        destinationPhoto.thumbnailKey,
+      );
+    } catch (error) {
+      await Promise.allSettled([
+        copiedFull ? deleteObjectIfPresent(destinationPhoto.fullKey) : Promise.resolve(),
+        copiedThumbnail ? deleteObjectIfPresent(destinationPhoto.thumbnailKey) : Promise.resolve(),
+      ]);
+      throw error;
+    }
+
+    return response(200, {
+      sourceKey,
+      destinationKey: destinationPhoto.fullKey,
+      duplicatedKeys: [destinationPhoto.fullKey, destinationPhoto.thumbnailKey],
+    });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -65,18 +102,6 @@ function parseBody(event: APIGatewayProxyEvent) {
   } catch {
     return null;
   }
-}
-
-function sanitizeFolderId(value?: string) {
-  if (!value) return null;
-  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
-  if (!trimmed) return null;
-  if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
-  return trimmed;
-}
-
-function encodeKey(key: string) {
-  return encodeURIComponent(key).replace(/%2F/g, "/");
 }
 
 function getClaims(event: APIGatewayProxyEvent) {
@@ -107,4 +132,43 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
+}
+
+async function copyObject(sourceKey: string, destinationKey: string) {
+  await s3.send(
+    new CopyObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: destinationKey,
+      CopySource: `${BUCKET_NAME}/${encodeS3Key(sourceKey)}`,
+    }),
+  );
+}
+
+async function copyOptionalObject(sourceKey: string, destinationKey: string) {
+  try {
+    await copyObject(sourceKey, destinationKey);
+    return true;
+  } catch (error) {
+    if (isMissingKeyError(error)) return false;
+    throw error;
+  }
+}
+
+async function deleteObjectIfPresent(key: string) {
+  try {
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+      }),
+    );
+  } catch {
+    // Best-effort cleanup after partial duplicate failure.
+  }
+}
+
+function isMissingKeyError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: string; Code?: string };
+  return candidate.name === "NoSuchKey" || candidate.Code === "NoSuchKey";
 }

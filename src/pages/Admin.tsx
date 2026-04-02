@@ -1,6 +1,6 @@
 import { Box, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { Header } from "../components/Header";
 import { Photo } from "../types/photo";
@@ -55,8 +55,8 @@ export default function Admin() {
   const theme = useTheme();
   const isAdmin = Boolean(user?.groups.includes("admin"));
   const mutedText = theme.palette.text.secondary;
-  const subtleBorder = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.12 : 0.2);
-  const cardBg = alpha(theme.palette.common.black, theme.palette.mode === "light" ? 0.04 : 0.2);
+  const subtleBorder = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.08 : 0.16);
+  const cardBg = alpha(theme.palette.background.paper, theme.palette.mode === "light" ? 0.82 : 0.78);
   const itemBg = alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.06 : 0.08);
 
   const apiBase = photoApiBaseUrl;
@@ -64,7 +64,7 @@ export default function Admin() {
 
   const getFileName = (key: string) => key.split("/").pop() ?? key;
 
-  const loadFolders = async () => {
+  const loadFolders = useCallback(async () => {
     if (!apiBase) return;
     const res = await authFetch(`${apiBase}/folders`, { method: "GET" });
     if (!res.ok) return;
@@ -75,9 +75,9 @@ export default function Admin() {
       ...items.filter((item) => item.folderId !== "public"),
     ];
     setFolders(withDefault);
-  };
+  }, [apiBase]);
 
-  const loadAllUsers = async () => {
+  const loadAllUsers = useCallback(async () => {
     if (!apiBase) return;
     setAllUsersLoading(true);
     setAllUsersError(null);
@@ -95,12 +95,12 @@ export default function Admin() {
     } finally {
       setAllUsersLoading(false);
     }
-  };
+  }, [apiBase]);
 
   useEffect(() => {
     loadFolders().catch(() => undefined);
     loadAllUsers().catch(() => undefined);
-  }, []);
+  }, [loadAllUsers, loadFolders]);
 
   useEffect(() => {
     if (!selectedFolder) {
@@ -120,7 +120,7 @@ export default function Admin() {
     }
   }, [selectedFolder]);
 
-  const loadFolderItems = async (folderIdToLoad: string) => {
+  const loadFolderItems = useCallback(async (folderIdToLoad: string) => {
     if (!apiBase) return;
     const requestSeq = ++folderItemsRequestSeq.current;
     setItemsLoading(true);
@@ -160,9 +160,9 @@ export default function Admin() {
       if (selectedFolderRef.current !== folderIdToLoad) return;
       setItemsLoading(false);
     }
-  };
+  }, [apiBase]);
 
-  const loadFolderUsers = async (folderIdToLoad: string) => {
+  const loadFolderUsers = useCallback(async (folderIdToLoad: string) => {
     if (!apiBase) return;
     setUsersLoading(true);
     setUsersError(null);
@@ -189,7 +189,7 @@ export default function Admin() {
       setUsersLoading(false);
       setBannedLoading(false);
     }
-  };
+  }, [apiBase]);
 
   const createFolder = async () => {
     setStatusMessage(null);
@@ -329,7 +329,7 @@ export default function Admin() {
       setActionKey(null);
       return;
     }
-    setFolderItems((prev) => prev.filter((item) => item.key !== key));
+    setFolderItems((prev) => prev.filter((item) => (item.storageKey ?? item.key) !== key));
     setStatusMessage(`Deleted ${payload.deletedKey ?? key}`);
     setActionKey(null);
   };
@@ -399,7 +399,7 @@ export default function Admin() {
       setActionKey(null);
       return;
     }
-    setFolderItems((prev) => prev.filter((item) => item.key !== key));
+    setFolderItems((prev) => prev.filter((item) => (item.storageKey ?? item.key) !== key));
     setStatusMessage(`Moved to ${payload.destinationKey ?? itemsMoveTarget}`);
     setActionKey(null);
   };
@@ -536,7 +536,7 @@ export default function Admin() {
       return;
     }
     loadFolderItems(selectedFolder).catch(() => undefined);
-  }, [selectedFolder]);
+  }, [selectedFolder, loadFolderItems]);
 
   useEffect(() => {
     if (!showFolderAccessPanel || !selectedFolder) {
@@ -547,24 +547,91 @@ export default function Admin() {
       return;
     }
     loadFolderUsers(selectedFolder).catch(() => undefined);
-  }, [selectedFolder, showFolderAccessPanel]);
+  }, [selectedFolder, showFolderAccessPanel, loadFolderUsers]);
 
   return (
     <>
       <Header />
       {isAdmin ? (
-        <Container maxWidth="lg" sx={{ color: "text.primary", pt: { xs: 2, sm: 3, md: 4 } }}>
-          <Typography variant="h4" sx={{ mb: 4 }}>
-            Admin
-          </Typography>
+        <Container maxWidth={false} sx={{ color: "text.primary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}>
+          <Box
+            sx={{
+              mb: 4,
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "1fr auto" },
+              gap: 2,
+              alignItems: "end",
+              borderBottom: `1px solid ${subtleBorder}`,
+              pb: { xs: 2.5, md: 3 },
+            }}
+          >
+            <Box sx={{ maxWidth: 720 }}>
+              <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+                Admin Workspace
+              </Typography>
+              <Typography variant="h4" sx={{ mb: 1, fontSize: { xs: "2rem", md: "2.8rem" } }}>
+                Manage folders, invites, and access
+              </Typography>
+              <Typography sx={{ color: mutedText }}>
+                Operate the private gallery system from one place: folder structure, uploads, access control, and invite distribution.
+              </Typography>
+            </Box>
 
-          {statusMessage && <Box sx={{ mb: 3, color: mutedText }}>{statusMessage}</Box>}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(88px, 120px))",
+                gap: 1.5,
+              }}
+            >
+              <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3, px: 1.5, py: 1.25, backgroundColor: cardBg }}>
+                <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: mutedText }}>
+                  Folders
+                </Typography>
+                <Typography variant="h6" sx={{ fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+                  {folders.length}
+                </Typography>
+              </Box>
+              <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3, px: 1.5, py: 1.25, backgroundColor: cardBg }}>
+                <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: mutedText }}>
+                  Users
+                </Typography>
+                <Typography variant="h6" sx={{ fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+                  {allUsers.length}
+                </Typography>
+              </Box>
+              <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3, px: 1.5, py: 1.25, backgroundColor: cardBg }}>
+                <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: mutedText }}>
+                  Active
+                </Typography>
+                <Typography variant="h6" sx={{ fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+                  {selectedFolder ?? "None"}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          {statusMessage && (
+            <Box
+              sx={{
+                mb: 3,
+                px: 2.25,
+                py: 1.75,
+                borderRadius: 3,
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                color: mutedText,
+              }}
+            >
+              {statusMessage}
+            </Box>
+          )}
 
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-              gap: 4,
+              gridTemplateColumns: { xs: "1fr", md: "320px minmax(0, 1fr)" },
+              gap: { xs: 3, md: 4 },
             }}
           >
             <FoldersSidebar

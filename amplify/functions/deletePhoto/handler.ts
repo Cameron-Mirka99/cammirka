@@ -1,5 +1,6 @@
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getManagedPhotoKeysFromStorageKey } from "../shared/photoPaths.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -28,14 +29,25 @@ export const handler = async (
       return response(400, { message: "key is required." });
     }
 
-    await s3.send(
-      new DeleteObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-      }),
-    );
+    const photo = getManagedPhotoKeysFromStorageKey(key);
+    if (!photo) {
+      return response(400, { message: "Invalid key." });
+    }
 
-    return response(200, { deletedKey: key });
+    if (photo.isLegacy) {
+      await deleteObject(photo.legacyKey);
+      return response(200, { deletedKey: photo.legacyKey, deletedKeys: [photo.legacyKey] });
+    }
+
+    await Promise.all([
+      deleteObject(photo.fullKey),
+      deleteOptionalObject(photo.thumbnailKey),
+    ]);
+
+    return response(200, {
+      deletedKey: photo.fullKey,
+      deletedKeys: [photo.fullKey, photo.thumbnailKey],
+    });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -80,4 +92,28 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
+}
+
+async function deleteObject(key: string) {
+  await s3.send(
+    new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    }),
+  );
+}
+
+async function deleteOptionalObject(key: string) {
+  try {
+    await deleteObject(key);
+  } catch (error) {
+    if (isMissingKeyError(error)) return;
+    throw error;
+  }
+}
+
+function isMissingKeyError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: string; Code?: string };
+  return candidate.name === "NoSuchKey" || candidate.Code === "NoSuchKey";
 }

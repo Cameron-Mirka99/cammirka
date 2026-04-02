@@ -2,6 +2,12 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import {
+  encodeS3Key,
+  isDirectPhotoObjectKey,
+  parsePhotoIdentity,
+  sanitizeFolderId,
+} from "../shared/photoPaths.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -14,6 +20,13 @@ const DEFAULT_LIMIT = Number.parseInt(process.env.DEFAULT_LIMIT ?? "200", 10);
 type RequestBody = {
   excludeKeys?: string[];
   limit?: number;
+};
+
+type ListedPhoto = {
+  canonicalKey: string;
+  fullKey?: string;
+  thumbnailKey?: string;
+  legacyKey?: string;
 };
 
 export const handler = async (
@@ -105,8 +118,7 @@ export const handler = async (
     }
 
     const excludeSet = new Set(excludeKeys);
-    const reservoir: string[] = [];
-    let eligibleCount = 0;
+    const candidates = new Map<string, ListedPhoto>();
     let scanned = 0;
     let continuationToken: string | undefined;
 
@@ -123,17 +135,22 @@ export const handler = async (
       for (const obj of contents) {
         scanned++;
         if (scanned > MAX_SCAN) break;
-        if (!obj.Key || obj.Size === 0 || excludeSet.has(obj.Key)) continue;
-        if (!isDirectFolderObjectKey(obj.Key, folderId)) continue;
+        if (!obj.Key || obj.Size === 0) continue;
+        if (!isDirectPhotoObjectKey(obj.Key, folderId)) continue;
+        const identity = parsePhotoIdentity(obj.Key);
+        if (!identity) continue;
 
-        eligibleCount++;
-
-        if (reservoir.length < limit) {
-          reservoir.push(obj.Key);
+        const current = candidates.get(identity.canonicalKey) ?? {
+          canonicalKey: identity.canonicalKey,
+        };
+        if (identity.variant === "full") {
+          current.fullKey = obj.Key;
+        } else if (identity.variant === "thumb") {
+          current.thumbnailKey = obj.Key;
         } else {
-          const j = Math.floor(Math.random() * eligibleCount);
-          if (j < limit) reservoir[j] = obj.Key;
+          current.legacyKey = obj.Key;
         }
+        candidates.set(identity.canonicalKey, current);
       }
 
       if (scanned > MAX_SCAN) break;
@@ -141,11 +158,26 @@ export const handler = async (
       continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
     } while (continuationToken);
 
-    const baseUrl = `https://${CLOUDFRONT_DOMAIN}`.replace(/\/+$/, "");
-    const photos = reservoir.map((key) => ({
-      key,
-      url: `${baseUrl}/${encodeURI(key)}`,
-    }));
+    const eligiblePhotos = Array.from(candidates.values()).filter((photo) => {
+      const primaryKey = photo.fullKey ?? photo.legacyKey;
+      if (!primaryKey) {
+        return false;
+      }
+
+      return !excludeSet.has(photo.canonicalKey) && !excludeSet.has(primaryKey);
+    });
+    const selectedPhotos = samplePhotos(eligiblePhotos, limit);
+    const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
+    const photos = selectedPhotos.map((photo) => {
+      const storageKey = photo.fullKey ?? photo.legacyKey;
+      const thumbnailKey = photo.thumbnailKey ?? photo.fullKey ?? photo.legacyKey;
+      return {
+        key: photo.canonicalKey,
+        storageKey,
+        url: `${baseUrl}/${encodeS3Key(storageKey!)}`,
+        thumbnailUrl: `${baseUrl}/${encodeS3Key(thumbnailKey!)}`,
+      };
+    });
 
     return response(200, {
       photos,
@@ -154,7 +186,7 @@ export const handler = async (
         returned: photos.length,
         excludedCount: excludeSet.size,
         scanned,
-        eligibleCount,
+        eligibleCount: eligiblePhotos.length,
         folderId,
       },
     });
@@ -194,22 +226,6 @@ function isAdmin(claims: Record<string, string>) {
   return typeof groups === "string" && groups.includes("admin");
 }
 
-function sanitizeFolderId(value?: string) {
-  if (!value) return null;
-  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
-  if (!trimmed) return null;
-  if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
-  return trimmed;
-}
-
-function isDirectFolderObjectKey(key: string, folderId: string) {
-  const prefix = `${folderId}/`;
-  if (!key.startsWith(prefix)) return false;
-  const remainder = key.slice(prefix.length);
-  if (!remainder) return false;
-  return !remainder.includes("/");
-}
-
 async function isUserInFolder(username: string, folderId: string) {
   const result = await ddb.send(
     new GetCommand({
@@ -219,4 +235,14 @@ async function isUserInFolder(username: string, folderId: string) {
   );
 
   return Boolean(result.Item);
+}
+
+function samplePhotos<T>(items: T[], limit: number) {
+  if (items.length <= limit) return items;
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled.slice(0, limit);
 }

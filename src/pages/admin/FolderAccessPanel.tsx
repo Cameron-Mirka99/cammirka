@@ -1,4 +1,5 @@
 import { Autocomplete, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { FolderSummary, FolderUser } from "./types";
 
 type FolderAccessPanelProps = {
@@ -78,15 +79,19 @@ export function FolderAccessPanel({
     <Box
       sx={{
         border: `1px solid ${subtleBorder}`,
-        borderRadius: 2,
-        p: 2,
+        borderRadius: 4,
+        p: 2.5,
         background: cardBg,
+        backdropFilter: "blur(18px)",
         maxHeight: { xl: "75vh" },
         overflowY: { xl: "auto" },
       }}
     >
-      <Typography variant="h6" sx={{ mb: 2 }}>
+      <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
         Folder Access
+      </Typography>
+      <Typography variant="h6" sx={{ mb: 0.75, fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+        Manage users and bans
       </Typography>
       <Typography sx={{ mb: 3, color: mutedText }}>
         Users and bans for <strong>{selectedFolder}</strong>.
@@ -184,9 +189,9 @@ export function FolderAccessPanel({
                   flexDirection: "column",
                   gap: 1,
                   padding: 1.5,
-                  borderRadius: 1,
-                  background: "rgba(0, 217, 255, 0.05)",
-                  border: "1px solid rgba(0, 217, 255, 0.2)",
+                  borderRadius: 3,
+                  background: (theme) => alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.03 : 0.06),
+                  border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
                 }}
               >
                 <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
@@ -247,9 +252,9 @@ export function FolderAccessPanel({
                   flexDirection: "column",
                   gap: 1,
                   padding: 1.5,
-                  borderRadius: 1,
-                  background: "rgba(255, 99, 71, 0.08)",
-                  border: "1px solid rgba(255, 99, 71, 0.25)",
+                  borderRadius: 3,
+                  background: (theme) => alpha(theme.palette.primary.main, 0.08),
+                  border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
                 }}
               >
                 <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>

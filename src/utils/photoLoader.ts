@@ -32,7 +32,7 @@ export const getFirstBatchPhotos = (
  */
 export const preloadPhotoBatch = async (photos: Photo[]): Promise<void> => {
   try {
-    const photoUrls = photos.map(p => p.url);
+    const photoUrls = photos.map((p) => p.thumbnailUrl || p.url);
     await photoCache.preloadMany(photoUrls);
   } catch (error) {
     console.error('Error preloading photos:', error);

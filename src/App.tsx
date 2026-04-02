@@ -1,10 +1,11 @@
 import React from "react";
 import { Box, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home";
+import Archive from "./pages/Archive";
 import About from "./pages/About";
-import Purchase from "./pages/Purchase";
 import Login from "./pages/Login";
 import MyPhotos from "./pages/MyPhotos";
 import Admin from "./pages/Admin";
@@ -21,8 +22,7 @@ function App() {
   return (
     <Box
       sx={{
-        background:
-          `linear-gradient(135deg, ${base} 0%, ${paper} 50%, ${base} 100%)`,
+        background: `linear-gradient(180deg, ${base} 0%, ${paper} 100%)`,
         minHeight: "100vh",
         position: "relative",
       }}
@@ -41,63 +41,45 @@ function App() {
         <Box
           sx={{
             position: "absolute",
-            top: "10%",
-            right: "10%",
-            width: "400px",
-            height: "400px",
+            top: "-8%",
+            right: "-4%",
+            width: "42vw",
+            height: "42vw",
+            minWidth: 280,
+            minHeight: 280,
             borderRadius: "50%",
             background:
               isLight
-                ? "radial-gradient(circle, rgba(255, 179, 0, 0.18) 0%, transparent 70%)"
-                : "radial-gradient(circle, rgba(255, 179, 0, 0.12) 0%, transparent 70%)",
-            filter: "blur(40px)",
-            animation: "float 20s ease-in-out infinite",
+                ? `radial-gradient(circle, ${alpha("#B88A2A", 0.12)} 0%, transparent 70%)`
+                : `radial-gradient(circle, ${alpha("#B88A2A", 0.14)} 0%, transparent 70%)`,
+            filter: "blur(56px)",
           }}
         />
         <Box
           sx={{
             position: "absolute",
-            bottom: "10%",
-            left: "10%",
-            width: "400px",
-            height: "400px",
+            bottom: "-18%",
+            left: "-6%",
+            width: "36vw",
+            height: "36vw",
+            minWidth: 240,
+            minHeight: 240,
             borderRadius: "50%",
             background:
               isLight
-                ? "radial-gradient(circle, rgba(120, 130, 140, 0.14) 0%, transparent 70%)"
-                : "radial-gradient(circle, rgba(120, 130, 140, 0.12) 0%, transparent 70%)",
-            filter: "blur(40px)",
-            animation: "float 15s ease-in-out infinite",
-            animationDelay: "5s",
+                ? `radial-gradient(circle, ${alpha("#7F8A78", 0.12)} 0%, transparent 70%)`
+                : `radial-gradient(circle, ${alpha("#7F8A78", 0.1)} 0%, transparent 70%)`,
+            filter: "blur(52px)",
           }}
         />
-        <style>
-          {`
-            @keyframes float {
-              0%, 100% {
-                transform: translateY(0px);
-              }
-              50% {
-                transform: translateY(30px);
-              }
-            }
-          `}
-        </style>
       </Box>
 
       <Box sx={{ position: "relative", zIndex: 1 }}>
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/archive" element={<Archive />} />
             <Route path="/about" element={<About />} />
-            <Route
-              path="/purchase"
-              element={
-                <RequireAdmin>
-                  <Purchase />
-                </RequireAdmin>
-              }
-            />
             <Route path="/login" element={<Login />} />
             <Route
               path="/my-photos"

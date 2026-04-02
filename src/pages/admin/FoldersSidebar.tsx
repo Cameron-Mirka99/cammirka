@@ -1,4 +1,5 @@
 import { Box, Button, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { FolderSummary } from "./types";
 
 type FoldersSidebarProps = {
@@ -30,15 +31,22 @@ export function FoldersSidebar({
     <Box
       sx={{
         border: `1px solid ${subtleBorder}`,
-        borderRadius: 2,
-        padding: 2,
+        borderRadius: 4,
+        padding: 2.5,
         background: cardBg,
-        maxHeight: "70vh",
+        backdropFilter: "blur(18px)",
+        maxHeight: "78vh",
         overflowY: "auto",
       }}
     >
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Folders
+      <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+        Folder Index
+      </Typography>
+      <Typography variant="h6" sx={{ mb: 0.75, fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+        Select a folder
+      </Typography>
+      <Typography sx={{ color: mutedText, mb: 2.5, fontSize: "0.92rem" }}>
+        Choose a folder to inspect items, generate invites, and manage access.
       </Typography>
       {folders.length === 0 ? (
         <Box sx={{ color: mutedText }}>No folders yet.</Box>
@@ -56,20 +64,20 @@ export function FoldersSidebar({
                   }
                 }}
                 sx={{
-                  padding: "6px 10px",
-                  borderRadius: 1,
+                  padding: "12px 14px",
+                  borderRadius: 3,
                   background: isDefault
-                    ? "rgba(0, 217, 255, 0.16)"
+                    ? alpha("#7F8A78", 0.14)
                     : selectedFolder === folder.folderId
-                    ? "rgba(255, 179, 0, 0.2)"
+                    ? alpha("#B88A2A", 0.12)
                     : itemBg,
-                  fontSize: "0.9rem",
                   cursor: "pointer",
                   border: isDefault
-                    ? "1px solid rgba(0, 217, 255, 0.5)"
+                    ? `1px solid ${alpha("#7F8A78", 0.32)}`
                     : selectedFolder === folder.folderId
-                    ? "1px solid rgba(255, 179, 0, 0.5)"
-                    : "1px solid transparent",
+                    ? `1px solid ${alpha("#B88A2A", 0.32)}`
+                    : `1px solid ${alpha("#FFFFFF", 0.04)}`,
+                  transition: "background-color 180ms ease, border-color 180ms ease",
                 }}
               >
                 <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
@@ -79,11 +87,12 @@ export function FoldersSidebar({
                     </Box>
                     <Box
                       sx={{
-                        fontSize: "0.75rem",
+                        fontSize: "0.74rem",
                         color: mutedText,
                         display: "flex",
                         gap: 1,
                         flexWrap: "wrap",
+                        mt: 0.3,
                       }}
                     >
                       <strong>Id:</strong>
@@ -101,7 +110,7 @@ export function FoldersSidebar({
                       sx={{
                         color: mutedText,
                         minWidth: "auto",
-                        padding: "0 6px",
+                        padding: "0 4px",
                       }}
                     >
                       Delete

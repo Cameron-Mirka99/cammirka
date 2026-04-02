@@ -1,12 +1,24 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import sharp from "sharp";
+import {
+  buildCanonicalPhotoKey,
+  buildFullPhotoKey,
+  buildThumbnailPhotoKey,
+  sanitizeFolderId,
+} from "../shared/photoPaths.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const THUMBNAIL_MAX_WIDTH = Number.parseInt(process.env.THUMBNAIL_MAX_WIDTH ?? "960", 10);
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -22,8 +34,6 @@ export const handler = async (
     }
 
     const body = parseBody(event);
-    const image = body?.image;
-    const imageName = body?.imageName;
     const folderId = sanitizeFolderId(body?.folderId);
 
     if (!folderId) {
@@ -65,22 +75,44 @@ export const handler = async (
           };
         }
 
-        const imageKey = `${folderId}/${upload.imageName}`;
+        const canonicalKey = buildCanonicalPhotoKey(folderId, upload.imageName);
+        const fullKey = buildFullPhotoKey(folderId, upload.imageName);
+        const thumbnailKey = buildThumbnailPhotoKey(folderId, upload.imageName);
+        const contentType =
+          guessContentType(upload.imageName) || "application/octet-stream";
+        const thumbnail = await createThumbnail(imageBuffer, contentType);
 
-        const putCommand = new PutObjectCommand({
+        const putFullCommand = new PutObjectCommand({
           Bucket: BUCKET_NAME,
-          Key: imageKey,
+          Key: fullKey,
           Body: imageBuffer,
-          ContentType:
-            guessContentType(upload.imageName) || "application/octet-stream",
+          ContentType: contentType,
         });
 
-        await s3.send(putCommand);
+        const putThumbnailCommand = new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: thumbnailKey,
+          Body: thumbnail.buffer,
+          ContentType: thumbnail.contentType,
+        });
+
+        try {
+          await s3.send(putFullCommand);
+          await s3.send(putThumbnailCommand);
+        } catch (error) {
+          await Promise.allSettled([
+            deleteObjectIfPresent(fullKey),
+            deleteObjectIfPresent(thumbnailKey),
+          ]);
+          throw error;
+        }
 
         return {
           imageName: upload.imageName,
           ok: true,
-          key: imageKey,
+          key: canonicalKey,
+          fullKey,
+          thumbnailKey,
         };
       }),
     );
@@ -136,14 +168,6 @@ function normalizeUploads(body: {
   return [];
 }
 
-function sanitizeFolderId(value?: string) {
-  if (!value) return null;
-  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
-  if (!trimmed) return null;
-  if (!/^[a-zA-Z0-9/_-]+$/.test(trimmed)) return null;
-  return trimmed;
-}
-
 function getClaims(event: APIGatewayProxyEvent) {
   const authorizer = event.requestContext.authorizer as
     | { claims?: Record<string, string> }
@@ -184,7 +208,56 @@ function guessContentType(filename: string) {
       return "image/png";
     case "gif":
       return "image/gif";
+    case "webp":
+      return "image/webp";
     default:
       return null;
+  }
+}
+
+async function createThumbnail(
+  imageBuffer: Buffer,
+  contentType: string,
+): Promise<{ buffer: Buffer; contentType: string }> {
+  // Keep GIF uploads functional for now without attempting animated resizing.
+  if (contentType === "image/gif") {
+    return { buffer: imageBuffer, contentType };
+  }
+
+  const pipeline = sharp(imageBuffer, { failOn: "none" }).rotate().resize({
+    width: THUMBNAIL_MAX_WIDTH,
+    withoutEnlargement: true,
+  });
+
+  if (contentType === "image/png") {
+    return {
+      buffer: await pipeline.png({ compressionLevel: 9 }).toBuffer(),
+      contentType: "image/png",
+    };
+  }
+
+  if (contentType === "image/webp") {
+    return {
+      buffer: await pipeline.webp({ quality: 78 }).toBuffer(),
+      contentType: "image/webp",
+    };
+  }
+
+  return {
+    buffer: await pipeline.jpeg({ quality: 78, mozjpeg: true }).toBuffer(),
+    contentType: "image/jpeg",
+  };
+}
+
+async function deleteObjectIfPresent(key: string) {
+  try {
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+      }),
+    );
+  } catch {
+    // Best-effort cleanup after partial upload failure.
   }
 }

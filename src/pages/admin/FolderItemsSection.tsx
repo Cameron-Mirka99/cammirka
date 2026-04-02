@@ -1,4 +1,5 @@
 import { Box, Button, MenuItem, TextField, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { Photo } from "../../types/photo";
 import { FolderSummary } from "./types";
 
@@ -42,12 +43,24 @@ export function FolderItemsSection({
   const getFileName = (key: string) => key.split("/").pop() ?? key;
 
   return (
-    <Box sx={{ mb: 4 }}>
-      <Typography variant="h6" sx={{ mb: 1 }}>
+    <Box
+      sx={{
+        mb: 4,
+        border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+        borderRadius: 4,
+        p: { xs: 2.5, md: 3 },
+        backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.78),
+        backdropFilter: "blur(18px)",
+      }}
+    >
+      <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
         Folder Items
       </Typography>
-      <Typography sx={{ mb: 2, color: mutedText }}>
-        Select a folder on the left to view its contents.
+      <Typography variant="h6" sx={{ mb: 0.75, fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
+        Manage current contents
+      </Typography>
+      <Typography sx={{ mb: 2.5, color: mutedText }}>
+        Select a folder on the left to inspect items, refresh the list, and move or duplicate files.
       </Typography>
       <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", mb: 2 }}>
         <TextField
@@ -100,13 +113,13 @@ export function FolderItemsSection({
                   gap: 2,
                   alignItems: "stretch",
                   padding: 2,
-                  borderRadius: 1,
-                  background: "rgba(255, 179, 0, 0.05)",
-                  border: "1px solid rgba(255, 179, 0, 0.2)",
-                  transition: "all 0.3s ease",
+                  borderRadius: 3,
+                  background: (theme) => alpha(theme.palette.text.primary, theme.palette.mode === "light" ? 0.03 : 0.06),
+                  border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+                  transition: "background-color 180ms ease, border-color 180ms ease",
                   "&:hover": {
-                    background: "rgba(255, 179, 0, 0.1)",
-                    borderColor: "rgba(255, 179, 0, 0.4)",
+                    background: (theme) => alpha(theme.palette.primary.main, 0.06),
+                    borderColor: (theme) => alpha(theme.palette.primary.main, 0.18),
                   },
                 }}
               >
@@ -120,14 +133,14 @@ export function FolderItemsSection({
                 >
                   <Box
                     component="img"
-                    src={item.url}
+                    src={item.thumbnailUrl ?? item.url}
                     alt={getFileName(item.key)}
                     sx={{
                       width: 90,
                       height: 60,
                       objectFit: "cover",
-                      borderRadius: 1,
-                      border: "1px solid rgba(255, 179, 0, 0.2)",
+                      borderRadius: 2,
+                      border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
                       flexShrink: 0,
                     }}
                   />
@@ -147,16 +160,16 @@ export function FolderItemsSection({
                   <Button
                     size="small"
                     variant="outlined"
-                    onClick={() => onDuplicate(item.key)}
-                    disabled={actionKey === item.key}
+                    onClick={() => onDuplicate(item.storageKey ?? item.key)}
+                    disabled={actionKey === (item.storageKey ?? item.key)}
                   >
                     Copy to folder
                   </Button>
                   <Button
                     size="small"
                     variant="outlined"
-                    onClick={() => onMove(item.key)}
-                    disabled={actionKey === item.key || !itemsMoveTarget}
+                    onClick={() => onMove(item.storageKey ?? item.key)}
+                    disabled={actionKey === (item.storageKey ?? item.key) || !itemsMoveTarget}
                   >
                     Move
                   </Button>
@@ -164,8 +177,8 @@ export function FolderItemsSection({
                     size="small"
                     color="error"
                     variant="outlined"
-                    onClick={() => onDelete(item.key)}
-                    disabled={actionKey === item.key}
+                    onClick={() => onDelete(item.storageKey ?? item.key)}
+                    disabled={actionKey === (item.storageKey ?? item.key)}
                   >
                     Delete
                   </Button>

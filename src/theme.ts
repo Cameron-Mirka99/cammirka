@@ -1,79 +1,157 @@
-import { createTheme } from "@mui/material/styles";
+import { alpha, createTheme } from "@mui/material/styles";
 import type { PaletteMode } from "@mui/material";
 
-export const createAppTheme = (mode: PaletteMode) =>
-  createTheme({
+export const createAppTheme = (mode: PaletteMode) => {
+  const isLight = mode === "light";
+
+  return createTheme({
     palette: {
       mode,
       primary: {
-        main: "#FFB300", // Marigold
-        light: "#FFD700",
-        dark: "#FF9500",
+        main: "#B88A2A",
+        light: "#D6AA4C",
+        dark: "#8F6716",
       },
       secondary: {
-        main: "#FF6B35", // Warm terracotta
-        light: "#FF8C5A",
-        dark: "#E85A2A",
+        main: "#7F8A78",
+        light: "#9AA494",
+        dark: "#606A59",
       },
-      background:
-        mode === "light"
-          ? {
-              default: "#F7F5F2", // Warm light
-              paper: "#FFFFFF",
-            }
-          : {
-              default: "#0F1114", // Deep graphite
-              paper: "#161A1F", // Slightly lighter graphite
-            },
-      text:
-        mode === "light"
-          ? {
-              primary: "#1D2227",
-              secondary: "#5B6470",
-            }
-          : {
-              primary: "#FFFFFF",
-              secondary: "#A0AEC0",
-            },
+      background: isLight
+        ? {
+            default: "#F3EEE3",
+            paper: "#FBF8F1",
+          }
+        : {
+            default: "#0F0F0C",
+            paper: "#171713",
+          },
+      text: isLight
+        ? {
+            primary: "#191713",
+            secondary: "#615B50",
+          }
+        : {
+            primary: "#EAE4D8",
+            secondary: "#A8A18F",
+          },
+      divider: isLight
+        ? "rgba(25, 23, 19, 0.12)"
+        : "rgba(234, 228, 216, 0.12)",
       success: {
-        main: mode === "light" ? "#2F7D32" : "#6366F1",
+        main: isLight ? "#47624B" : "#7E987D",
       },
     },
     typography: {
-      fontFamily: "'Inter', 'Segoe UI', sans-serif",
+      fontFamily: "'Manrope', 'Segoe UI', sans-serif",
       h1: {
-        fontWeight: 700,
-        letterSpacing: "-0.02em",
+        fontFamily: "'Cormorant Garamond', serif",
+        fontWeight: 600,
+        lineHeight: 0.92,
+        letterSpacing: "-0.04em",
       },
       h2: {
-        fontWeight: 700,
-        letterSpacing: "-0.01em",
+        fontFamily: "'Cormorant Garamond', serif",
+        fontWeight: 600,
+        lineHeight: 0.96,
+        letterSpacing: "-0.03em",
       },
       h3: {
+        fontFamily: "'Cormorant Garamond', serif",
         fontWeight: 600,
-        letterSpacing: "-0.005em",
+        lineHeight: 1,
+        letterSpacing: "-0.025em",
       },
       h4: {
+        fontFamily: "'Cormorant Garamond', serif",
         fontWeight: 600,
+        lineHeight: 1.02,
+        letterSpacing: "-0.02em",
+      },
+      h5: {
+        fontFamily: "'Cormorant Garamond', serif",
+        fontWeight: 600,
+        lineHeight: 1.08,
+      },
+      h6: {
+        fontWeight: 700,
+        letterSpacing: "0.02em",
+      },
+      subtitle1: {
+        fontSize: "0.88rem",
+        fontWeight: 700,
+        letterSpacing: "0.18em",
+        textTransform: "uppercase",
       },
       body1: {
         lineHeight: 1.8,
-        letterSpacing: "0.3px",
+        letterSpacing: "0.01em",
       },
       body2: {
-        lineHeight: 1.6,
+        lineHeight: 1.7,
+        letterSpacing: "0.01em",
+      },
+      button: {
+        fontWeight: 700,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
       },
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 18,
     },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          body: {
+            backgroundColor: isLight ? "#F3EEE3" : "#0F0F0C",
+            backgroundImage: isLight
+              ? "radial-gradient(circle at top, rgba(184, 138, 42, 0.1), transparent 30%)"
+              : "radial-gradient(circle at top, rgba(184, 138, 42, 0.14), transparent 28%)",
+          },
+          "::selection": {
+            backgroundColor: isLight
+              ? "rgba(184, 138, 42, 0.22)"
+              : "rgba(184, 138, 42, 0.3)",
+          },
+        },
+      },
       MuiButton: {
         styleOverrides: {
           root: {
-            textTransform: "none",
-            fontWeight: 600,
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            borderRadius: 999,
+            padding: "0.9rem 1.5rem",
+            transition: "transform 180ms ease, background-color 180ms ease, border-color 180ms ease, color 180ms ease",
+          },
+          containedPrimary: {
+            boxShadow: "none",
+            "&:hover": {
+              boxShadow: "none",
+              transform: "translateY(-1px)",
+            },
+          },
+          outlined: {
+            borderColor: isLight
+              ? "rgba(25, 23, 19, 0.16)"
+              : "rgba(234, 228, 216, 0.18)",
+            "&:hover": {
+              borderColor: alpha("#B88A2A", 0.7),
+              backgroundColor: alpha("#B88A2A", 0.08),
+              transform: "translateY(-1px)",
+            },
+          },
+          text: {
+            "&:hover": {
+              backgroundColor: "transparent",
+              color: "#B88A2A",
+            },
+          },
+        },
+      },
+      MuiAppBar: {
+        styleOverrides: {
+          root: {
+            boxShadow: "none",
           },
         },
       },
@@ -85,6 +163,14 @@ export const createAppTheme = (mode: PaletteMode) =>
           },
         },
       },
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            backgroundImage: "none",
+          },
+        },
+      },
     },
   });
+};
 
