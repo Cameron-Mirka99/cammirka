@@ -1,4 +1,4 @@
-import { Alert, Box, Container, Snackbar, Typography, useTheme } from "@mui/material";
+import { Box, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
@@ -13,10 +13,10 @@ import { FolderAccessPanel } from "./admin/FolderAccessPanel";
 import { FolderItemsSection } from "./admin/FolderItemsSection";
 import { FoldersSidebar } from "./admin/FoldersSidebar";
 import { UploadPhotoSection } from "./admin/UploadPhotoSection";
+import { UploadErrorToast } from "./admin/UploadErrorToast";
+import { buildUploadRequestBody, exceedsUploadLimit, formatBytes, getUploadLimitBytes } from "./admin/uploadUtils";
 import { FolderSummary, FolderUser } from "./admin/types";
 import { MotionReveal } from "../utils/motion";
-
-const MAX_UPLOAD_REQUEST_BYTES = 10 * 1024 * 1024;
 
 export default function Admin() {
   const { user } = useAuth();
@@ -269,13 +269,9 @@ export default function Admin() {
     }
 
     try {
-      const images = await Promise.all(
-        uploadFiles.map((file) => buildUploadPayload(file)),
-      );
-      const requestBody = JSON.stringify({ folderId: uploadFolderId, images });
-      const requestBytes = new Blob([requestBody]).size;
-      if (requestBytes > MAX_UPLOAD_REQUEST_BYTES) {
-        const message = `Upload request exceeds 10 MB (${formatBytes(requestBytes)}). Try fewer files or smaller images.`;
+      const { requestBody, requestBytes } = await buildUploadRequestBody(uploadFolderId, uploadFiles);
+      if (exceedsUploadLimit(requestBytes)) {
+        const message = `Upload request exceeds ${formatBytes(getUploadLimitBytes())} (${formatBytes(requestBytes)}). Try fewer files or smaller images.`;
         setStatusMessage(message);
         setUploadErrorToast(message);
         return;
@@ -581,24 +577,7 @@ export default function Admin() {
   return (
     <>
       <Header />
-      <Snackbar
-        open={Boolean(uploadErrorToast)}
-        autoHideDuration={5000}
-        onClose={(_, reason) => {
-          if (reason === "clickaway") return;
-          setUploadErrorToast(null);
-        }}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      >
-        <Alert
-          onClose={() => setUploadErrorToast(null)}
-          severity="error"
-          variant="filled"
-          sx={{ width: "100%" }}
-        >
-          {uploadErrorToast}
-        </Alert>
-      </Snackbar>
+      <UploadErrorToast message={uploadErrorToast} onClose={() => setUploadErrorToast(null)} />
       {isAdmin ? (
         <Container maxWidth={false} sx={{ color: "text.primary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}>
           <MotionReveal
@@ -808,84 +787,4 @@ export default function Admin() {
       )}
     </>
   );
-}
-
-function toBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === "string") {
-        const [, base64] = result.split(",");
-        resolve(base64 ?? "");
-      } else {
-        reject(new Error("Failed to read file"));
-      }
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-async function buildUploadPayload(file: File) {
-  const image = await toBase64(file);
-  const thumbnail = await createThumbnailFile(file);
-
-  return {
-    imageName: file.name,
-    image,
-    thumbnailImage: await toBase64(thumbnail),
-    thumbnailContentType: thumbnail.type || file.type || "image/jpeg",
-  };
-}
-
-async function createThumbnailFile(file: File) {
-  if (file.type === "image/gif") {
-    return file;
-  }
-
-  const bitmap = await createImageBitmap(file);
-  const maxWidth = 960;
-  const scale = bitmap.width > maxWidth ? maxWidth / bitmap.width : 1;
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext("2d");
-  if (!context) {
-    bitmap.close();
-    throw new Error("Could not create canvas context for thumbnail.");
-  }
-
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (value) => {
-        if (value) {
-          resolve(value);
-          return;
-        }
-        reject(new Error("Failed to render thumbnail."));
-      },
-      outputType,
-      outputType === "image/jpeg" ? 0.82 : undefined,
-    );
-  });
-
-  return new File([blob], file.name, {
-    type: outputType,
-    lastModified: file.lastModified,
-  });
 }
