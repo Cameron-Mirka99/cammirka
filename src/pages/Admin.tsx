@@ -1,4 +1,4 @@
-import { Box, Container, Typography, useTheme } from "@mui/material";
+import { Alert, Box, Container, Snackbar, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
@@ -14,6 +14,9 @@ import { FolderItemsSection } from "./admin/FolderItemsSection";
 import { FoldersSidebar } from "./admin/FoldersSidebar";
 import { UploadPhotoSection } from "./admin/UploadPhotoSection";
 import { FolderSummary, FolderUser } from "./admin/types";
+import { MotionReveal } from "../utils/motion";
+
+const MAX_UPLOAD_REQUEST_BYTES = 10 * 1024 * 1024;
 
 export default function Admin() {
   const { user } = useAuth();
@@ -24,6 +27,7 @@ export default function Admin() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [uploadFolderId, setUploadFolderId] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadErrorToast, setUploadErrorToast] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [folderItems, setFolderItems] = useState<Photo[]>([]);
@@ -252,31 +256,59 @@ export default function Admin() {
   const uploadImage = async () => {
     setStatusMessage(null);
     if (!apiBase) {
-      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      const message = "REACT_APP_PHOTO_API_URL is not configured.";
+      setStatusMessage(message);
+      setUploadErrorToast(message);
       return;
     }
     if (uploadFiles.length === 0) {
-      setStatusMessage("Select one or more files to upload.");
+      const message = "Select one or more files to upload.";
+      setStatusMessage(message);
+      setUploadErrorToast(message);
       return;
     }
 
-    const images = await Promise.all(
-      uploadFiles.map((file) => buildUploadPayload(file)),
-    );
-    const res = await authFetch(`${apiBase}/upload-image`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId: uploadFolderId, images }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setStatusMessage(payload?.message ?? "Upload failed.");
-      return;
-    }
-    setStatusMessage(payload.message ?? "Upload complete.");
-    setUploadFiles([]);
-    if (selectedFolder && uploadFolderId && selectedFolder === uploadFolderId) {
-      loadFolderItems(selectedFolder).catch(() => undefined);
+    try {
+      const images = await Promise.all(
+        uploadFiles.map((file) => buildUploadPayload(file)),
+      );
+      const requestBody = JSON.stringify({ folderId: uploadFolderId, images });
+      const requestBytes = new Blob([requestBody]).size;
+      if (requestBytes > MAX_UPLOAD_REQUEST_BYTES) {
+        const message = `Upload request exceeds 10 MB (${formatBytes(requestBytes)}). Try fewer files or smaller images.`;
+        setStatusMessage(message);
+        setUploadErrorToast(message);
+        return;
+      }
+
+      const res = await authFetch(`${apiBase}/upload-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        const responseMessage = [
+          payload?.message,
+          payload?.error,
+          typeof payload?.details === "string" ? payload.details : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const message = responseMessage || `Upload failed (HTTP ${res.status}).`;
+        setStatusMessage(message);
+        setUploadErrorToast(message);
+        return;
+      }
+      setStatusMessage(payload.message ?? "Upload complete.");
+      setUploadFiles([]);
+      if (selectedFolder && uploadFolderId && selectedFolder === uploadFolderId) {
+        loadFolderItems(selectedFolder).catch(() => undefined);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed.";
+      setStatusMessage(message);
+      setUploadErrorToast(message);
     }
   };
 
@@ -549,9 +581,27 @@ export default function Admin() {
   return (
     <>
       <Header />
+      <Snackbar
+        open={Boolean(uploadErrorToast)}
+        autoHideDuration={5000}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") return;
+          setUploadErrorToast(null);
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setUploadErrorToast(null)}
+          severity="error"
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {uploadErrorToast}
+        </Alert>
+      </Snackbar>
       {isAdmin ? (
         <Container maxWidth={false} sx={{ color: "text.primary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}>
-          <Box
+          <MotionReveal
             sx={{
               mb: 4,
               display: "grid",
@@ -606,10 +656,10 @@ export default function Admin() {
                 </Typography>
               </Box>
             </Box>
-          </Box>
+          </MotionReveal>
 
           {statusMessage && (
-            <Box
+            <MotionReveal
               sx={{
                 mb: 3,
                 px: 2.25,
@@ -621,10 +671,11 @@ export default function Admin() {
               }}
             >
               {statusMessage}
-            </Box>
+            </MotionReveal>
           )}
 
-          <Box
+          <MotionReveal delay={80}>
+            <Box
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", md: "320px minmax(0, 1fr)" },
@@ -736,16 +787,19 @@ export default function Admin() {
                 />
               )}
             </Box>
-          </Box>
+            </Box>
+          </MotionReveal>
 
-          <AdvancedSection
-            subtleBorder={subtleBorder}
-            cardBg={cardBg}
-            mutedText={mutedText}
-            backfillLoading={backfillLoading}
-            backfillMessage={backfillMessage}
-            onBackfill={backfillFolderUsers}
-          />
+          <MotionReveal delay={140}>
+            <AdvancedSection
+              subtleBorder={subtleBorder}
+              cardBg={cardBg}
+              mutedText={mutedText}
+              backfillLoading={backfillLoading}
+              backfillMessage={backfillMessage}
+              onBackfill={backfillFolderUsers}
+            />
+          </MotionReveal>
         </Container>
       ) : (
         <Container sx={{ color: "text.secondary" }}>
@@ -771,6 +825,12 @@ function toBase64(file: File) {
     reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 async function buildUploadPayload(file: File) {

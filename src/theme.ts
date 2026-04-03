@@ -103,6 +103,82 @@ export const createAppTheme = (mode: PaletteMode) => {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          "@keyframes appOrbDrift": {
+            "0%": {
+              transform: "translate3d(0, 0, 0) scale(1)",
+            },
+            "50%": {
+              transform: "translate3d(0, -18px, 0) scale(1.06)",
+            },
+            "100%": {
+              transform: "translate3d(0, 0, 0) scale(1)",
+            },
+          },
+          "@keyframes appGlowSweep": {
+            "0%": {
+              transform: "translate3d(-8%, 0, 0) scaleX(1)",
+              opacity: 0.45,
+            },
+            "50%": {
+              transform: "translate3d(8%, -2%, 0) scaleX(1.08)",
+              opacity: 0.8,
+            },
+            "100%": {
+              transform: "translate3d(-8%, 0, 0) scaleX(1)",
+              opacity: 0.45,
+            },
+          },
+          "@keyframes appHeroPan": {
+            "0%": {
+              transform: "scale(1.02) translate3d(0, 0, 0)",
+            },
+            "50%": {
+              transform: "scale(1.08) translate3d(0, -1.5%, 0)",
+            },
+            "100%": {
+              transform: "scale(1.02) translate3d(0, 0, 0)",
+            },
+          },
+          "@keyframes appLinePulse": {
+            "0%": {
+              transform: "scaleX(0.72)",
+              opacity: 0.35,
+            },
+            "50%": {
+              transform: "scaleX(1)",
+              opacity: 1,
+            },
+            "100%": {
+              transform: "scaleX(0.72)",
+              opacity: 0.35,
+            },
+          },
+          "@keyframes appGridDrift": {
+            "0%": {
+              transform: "translate3d(0, 0, 0)",
+            },
+            "50%": {
+              transform: "translate3d(24px, 12px, 0)",
+            },
+            "100%": {
+              transform: "translate3d(0, 0, 0)",
+            },
+          },
+          "@keyframes appFloatIn": {
+            "0%": {
+              opacity: 0,
+              transform: "translate3d(0, 26px, 0) scale(0.98)",
+              filter: "blur(10px)",
+            },
+            "100%": {
+              opacity: 1,
+              transform: "translate3d(0, 0, 0) scale(1)",
+              filter: "blur(0)",
+            },
+          },
+          html: {
+            scrollBehavior: "smooth",
+          },
           body: {
             backgroundColor: isLight ? "#F3EEE3" : "#0F0F0C",
             backgroundImage: isLight
@@ -114,6 +190,16 @@ export const createAppTheme = (mode: PaletteMode) => {
               ? "rgba(184, 138, 42, 0.22)"
               : "rgba(184, 138, 42, 0.3)",
           },
+          "@media (prefers-reduced-motion: reduce)": {
+            html: {
+              scrollBehavior: "auto",
+            },
+            "*, *::before, *::after": {
+              animationDuration: "0.01ms !important",
+              animationIterationCount: "1 !important",
+              transitionDuration: "0.01ms !important",
+            },
+          },
         },
       },
       MuiButton: {
@@ -121,13 +207,14 @@ export const createAppTheme = (mode: PaletteMode) => {
           root: {
             borderRadius: 999,
             padding: "0.9rem 1.5rem",
-            transition: "transform 180ms ease, background-color 180ms ease, border-color 180ms ease, color 180ms ease",
+            transition:
+              "transform 240ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms ease, border-color 220ms ease, color 220ms ease, box-shadow 260ms ease",
           },
           containedPrimary: {
             boxShadow: "none",
             "&:hover": {
               boxShadow: "none",
-              transform: "translateY(-1px)",
+              transform: "translateY(-2px)",
             },
           },
           outlined: {
@@ -137,7 +224,7 @@ export const createAppTheme = (mode: PaletteMode) => {
             "&:hover": {
               borderColor: alpha("#B88A2A", 0.7),
               backgroundColor: alpha("#B88A2A", 0.08),
-              transform: "translateY(-1px)",
+              transform: "translateY(-2px)",
             },
           },
           text: {

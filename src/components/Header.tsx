@@ -19,6 +19,7 @@ import { alpha } from "@mui/material/styles";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { useThemeMode } from "../themeMode";
+import { motionHoverLift } from "../utils/motion";
 
 export const Header = () => {
   const location = useLocation();
@@ -69,7 +70,8 @@ export const Header = () => {
         sx={{
           backgroundColor: appBarBackground,
           borderBottom: `1px solid ${appBarBorder}`,
-          transition: "background-color 220ms ease, border-color 220ms ease",
+          backdropFilter: overlayMode ? "none" : "blur(18px)",
+          transition: "background-color 280ms ease, border-color 280ms ease, backdrop-filter 280ms ease",
         }}
       >
         <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 } }}>
@@ -83,6 +85,10 @@ export const Header = () => {
                 gap: 0.25,
                 textDecoration: "none",
                 color: navColor,
+                ...motionHoverLift,
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                },
               }}
             >
               <Typography
@@ -115,6 +121,11 @@ export const Header = () => {
                     color: navColor,
                     border: `1px solid ${overlayMode ? alpha("#F7F1E3", 0.18) : alpha(theme.palette.text.primary, 0.12)}`,
                     backgroundColor: overlayMode ? alpha("#0F0F0C", 0.18) : alpha(theme.palette.background.paper, 0.5),
+                    ...motionHoverLift,
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                      backgroundColor: overlayMode ? alpha("#0F0F0C", 0.28) : alpha(theme.palette.background.paper, 0.92),
+                    },
                   }}
                 >
                   <MenuIcon />
@@ -181,13 +192,31 @@ export const Header = () => {
                         sx={{
                           px: 0,
                           minWidth: "auto",
-                          color: isActive ? theme.palette.primary.main : navColor,
-                          fontSize: "0.82rem",
-                          "&:hover": {
-                            color: theme.palette.primary.main,
-                          },
-                        }}
-                      >
+                        color: isActive ? theme.palette.primary.main : navColor,
+                        fontSize: "0.82rem",
+                        position: "relative",
+                        ...motionHoverLift,
+                        "&::after": {
+                          content: '""',
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: -6,
+                          height: 1.5,
+                          backgroundColor: theme.palette.primary.main,
+                          transform: isActive ? "scaleX(1)" : "scaleX(0)",
+                          transformOrigin: "left center",
+                          transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        },
+                        "&:hover": {
+                          color: theme.palette.primary.main,
+                          transform: "translateY(-2px)",
+                        },
+                        "&:hover::after": {
+                          transform: "scaleX(1)",
+                        },
+                      }}
+                    >
                         {item.label}
                       </Button>
                     );
@@ -202,6 +231,26 @@ export const Header = () => {
                         minWidth: "auto",
                         color: navColor,
                         fontSize: "0.82rem",
+                        position: "relative",
+                        ...motionHoverLift,
+                        "&::after": {
+                          content: '""',
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: -6,
+                          height: 1.5,
+                          backgroundColor: theme.palette.primary.main,
+                          transform: "scaleX(0)",
+                          transformOrigin: "left center",
+                          transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        },
+                        "&:hover": {
+                          transform: "translateY(-2px)",
+                        },
+                        "&:hover::after": {
+                          transform: "scaleX(1)",
+                        },
                       }}
                     >
                       Private Access
@@ -214,8 +263,29 @@ export const Header = () => {
                       sx={{
                         px: 0,
                         minWidth: "auto",
+                        whiteSpace: "nowrap",
                         color: location.pathname === "/my-photos" ? theme.palette.primary.main : navColor,
                         fontSize: "0.82rem",
+                        position: "relative",
+                        ...motionHoverLift,
+                        "&::after": {
+                          content: '""',
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: -6,
+                          height: 1.5,
+                          backgroundColor: theme.palette.primary.main,
+                          transform: location.pathname === "/my-photos" ? "scaleX(1)" : "scaleX(0)",
+                          transformOrigin: "left center",
+                          transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        },
+                        "&:hover": {
+                          transform: "translateY(-2px)",
+                        },
+                        "&:hover::after": {
+                          transform: "scaleX(1)",
+                        },
                       }}
                     >
                       My Photos
@@ -231,6 +301,26 @@ export const Header = () => {
                         minWidth: "auto",
                         color: location.pathname === "/admin" ? theme.palette.primary.main : navColor,
                         fontSize: "0.82rem",
+                        position: "relative",
+                        ...motionHoverLift,
+                        "&::after": {
+                          content: '""',
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: -6,
+                          height: 1.5,
+                          backgroundColor: theme.palette.primary.main,
+                          transform: location.pathname === "/admin" ? "scaleX(1)" : "scaleX(0)",
+                          transformOrigin: "left center",
+                          transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        },
+                        "&:hover": {
+                          transform: "translateY(-2px)",
+                        },
+                        "&:hover::after": {
+                          transform: "scaleX(1)",
+                        },
                       }}
                     >
                       Admin
@@ -257,6 +347,26 @@ export const Header = () => {
                     px: overlayMode ? 1.5 : 0,
                     py: overlayMode ? 0.7 : 0,
                     minWidth: "auto",
+                    position: "relative",
+                    ...motionHoverLift,
+                    "&::after": {
+                      content: '""',
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      bottom: overlayMode ? -8 : -6,
+                      height: 1.5,
+                      backgroundColor: theme.palette.primary.main,
+                      transform: "scaleX(0)",
+                      transformOrigin: "left center",
+                      transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    },
+                    "&:hover": {
+                      transform: "translateY(-2px)",
+                    },
+                    "&:hover::after": {
+                      transform: "scaleX(1)",
+                    },
                   }}
                 >
                   {accountButtonLabel}

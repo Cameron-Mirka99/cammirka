@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { photoApiBaseUrl } from "../utils/apiConfig";
 import { authFetch } from "../utils/authFetch";
 import { Photo } from "../types/photo";
+import { MotionReveal, motionHoverLift } from "../utils/motion";
 
 export default function MyPhotos() {
   const { user, status } = useAuth();
@@ -223,7 +224,7 @@ export default function MyPhotos() {
     <>
       <Header />
       <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}>
-        <Box
+        <MotionReveal
           sx={{
             mb: { xs: 3, md: 4 },
             display: "flex",
@@ -257,7 +258,7 @@ export default function MyPhotos() {
           >
             Return to public archive
           </Button>
-        </Box>
+        </MotionReveal>
 
         {isAdmin || userFolders.length > 1 ? (
           <Box
@@ -267,7 +268,7 @@ export default function MyPhotos() {
               gap: { xs: 3, md: 4 },
             }}
           >
-            <Box
+            <MotionReveal
               sx={{
                 border: `1px solid ${panelBorder}`,
                 borderRadius: 4,
@@ -275,6 +276,7 @@ export default function MyPhotos() {
                 background: panelBg,
                 maxHeight: "75vh",
                 overflowY: "auto",
+                boxShadow: `0 24px 60px ${alpha(theme.palette.common.black, theme.palette.mode === "light" ? 0.04 : 0.18)}`,
               }}
             >
               <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
@@ -306,7 +308,10 @@ export default function MyPhotos() {
                           activeFolderId === folder.folderId
                             ? `1px solid ${alpha(theme.palette.primary.main, 0.32)}`
                             : `1px solid ${alpha(theme.palette.text.primary, 0.05)}`,
-                        transition: "background-color 180ms ease, border-color 180ms ease",
+                        ...motionHoverLift,
+                        "&:hover": {
+                          transform: "translateX(6px)",
+                        },
                       }}
                     >
                       <Box sx={{ fontSize: "0.95rem", color: "text.primary" }}>
@@ -319,9 +324,10 @@ export default function MyPhotos() {
                   ))}
                 </Box>
               )}
-            </Box>
+            </MotionReveal>
 
-            <Box>
+            <MotionReveal delay={120}>
+              <Box>
               {activeFolderId ? (
                 <MainImageDisplay key={activeFolderId} photos={photos} loading={loading} variant="private" />
               ) : (
@@ -329,7 +335,8 @@ export default function MyPhotos() {
                   Select a folder to view its gallery.
                 </Box>
               )}
-            </Box>
+              </Box>
+            </MotionReveal>
           </Box>
         ) : (
           <>

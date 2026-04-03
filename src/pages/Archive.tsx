@@ -1,10 +1,11 @@
-import { Box, Container, Typography, useTheme } from "@mui/material";
+import { Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "../components/Header";
 import { MainImageDisplay } from "../components/MainImageDisplay";
 import { Photo } from "../types/photo";
 import { photoApiBaseUrl } from "../utils/apiConfig";
+import { MotionParallax, MotionReveal } from "../utils/motion";
 
 const PAGE_SIZE = 24;
 
@@ -85,12 +86,25 @@ export default function Archive() {
       <Header />
 
       <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, pt: { xs: 4, md: 6 }, pb: { xs: 2, md: 3 } }}>
-        <Box
+        <MotionParallax offset={52}>
+          <MotionReveal
           sx={{
             borderBottom: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
             pb: { xs: 3, md: 4 },
             mb: { xs: 4, md: 5 },
             maxWidth: 820,
+            position: "relative",
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              left: 0,
+              bottom: -1,
+              width: { xs: 120, md: 180 },
+              height: 1.5,
+              background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.9)} 0%, transparent 100%)`,
+              animation: "appLinePulse 10s ease-in-out infinite",
+              transformOrigin: "left center",
+            },
           }}
         >
           <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1.5 }}>
@@ -104,13 +118,14 @@ export default function Archive() {
               mb: 1.5,
             }}
           >
-            Browse the full record.
+            Spend a little more time with the archive.
           </Typography>
           <Typography variant="body1" sx={{ color: theme.palette.text.secondary, maxWidth: 640 }}>
-            The archive is organized for browsing rather than chronology: a steady stream of birds, wetlands, forests,
-            and the field conditions that shape them.
+            This page is meant for wandering a bit: birds, wetlands, woods, and the changing conditions that shape how
+            each frame comes together.
           </Typography>
-        </Box>
+          </MotionReveal>
+        </MotionParallax>
       </Container>
 
       <MainImageDisplay

@@ -7,9 +7,11 @@ import { Header } from "../components/Header";
 import { MainImageDisplay } from "../components/MainImageDisplay";
 import { Photo } from "../types/photo";
 import { photoApiBaseUrl } from "../utils/apiConfig";
+import { FullscreenSection, MotionParallax, MotionReveal, usePointerParallax } from "../utils/motion";
 
 function Home() {
   const theme = useTheme();
+  const heroParallax = usePointerParallax(16);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const heroPhoto = useMemo(
@@ -58,7 +60,15 @@ function Home() {
     <>
       <Header />
 
+      <Box>
+      <FullscreenSection
+        sx={{
+          minHeight: { xs: "100svh", md: "100svh" },
+        }}
+      >
       <Box
+        {...heroParallax.interactiveProps}
+        style={heroParallax.style}
         sx={{
           mt: { xs: "-88px", md: "-96px" },
           minHeight: { xs: "100svh", md: "96svh" },
@@ -73,6 +83,22 @@ function Home() {
             : "linear-gradient(180deg, rgba(13, 13, 10, 0.7) 0%, rgba(13, 13, 10, 0.92) 100%)",
           backgroundSize: "cover",
           backgroundPosition: "center center",
+          perspective: "1600px",
+          "&::before": heroPhoto
+            ? {
+                content: '""',
+                position: "absolute",
+                inset: 0,
+                backgroundImage: `url(${heroPhoto})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center center",
+                mixBlendMode: "soft-light",
+                opacity: 0.18,
+                animation: "appHeroPan 22s ease-in-out infinite",
+                transformOrigin: "center center",
+                transform: "translate3d(0, 0, 0) scale(1.04)",
+              }
+            : undefined,
         }}
       >
         <Box
@@ -81,6 +107,8 @@ function Home() {
             inset: 0,
             background:
               "radial-gradient(circle at 78% 24%, rgba(184, 138, 42, 0.26), transparent 20%), radial-gradient(circle at 18% 78%, rgba(127, 138, 120, 0.15), transparent 28%)",
+            animation: "appGlowSweep 18s ease-in-out infinite",
+            transform: "translate3d(calc((var(--motion-glow-x, 50%) - 50%) * 0.12), calc((var(--motion-glow-y, 50%) - 50%) * 0.12), 0)",
           }}
         />
         <Container
@@ -92,7 +120,17 @@ function Home() {
             pt: { xs: 14, md: 16 },
           }}
         >
-          <Box sx={{ maxWidth: { xs: "100%", sm: 560, md: 680 } }}>
+          <Box
+            sx={{
+              maxWidth: { xs: "100%", sm: 560, md: 680 },
+              position: "relative",
+              zIndex: 1,
+              transform: "rotateX(calc(var(--motion-rotate-x, 0deg) * 0.45)) rotateY(calc(var(--motion-rotate-y, 0deg) * 0.55)) translate3d(0, 0, 0)",
+              transformStyle: "preserve-3d",
+              transition: "transform 220ms ease-out",
+            }}
+          >
+            <MotionReveal delay={80}>
             <Typography
               variant="subtitle1"
               sx={{
@@ -102,6 +140,8 @@ function Home() {
             >
               Central Ohio Archive
             </Typography>
+            </MotionReveal>
+            <MotionReveal delay={160} distance={36}>
             <Typography
               variant="h1"
               sx={{
@@ -114,6 +154,8 @@ function Home() {
                 Mirka
               </Box>
             </Typography>
+            </MotionReveal>
+            <MotionReveal delay={240}>
             <Typography
               sx={{
                 mt: 2,
@@ -125,6 +167,8 @@ function Home() {
             >
               Wildlife Photography
             </Typography>
+            </MotionReveal>
+            <MotionReveal delay={320}>
             <Typography
               variant="body1"
               sx={{
@@ -134,8 +178,10 @@ function Home() {
                 fontSize: { xs: "1rem", md: "1.08rem" },
               }}
             >
-              Field notes in light, motion, and quiet from Central Ohio.
+              A collection of mornings, small encounters, and time spent outside around Central Ohio.
             </Typography>
+            </MotionReveal>
+            <MotionReveal delay={420}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 4 }}>
               <Button
                 component={RouterLink}
@@ -167,34 +213,39 @@ function Home() {
                 About Cameron
               </Button>
             </Stack>
+            </MotionReveal>
           </Box>
         </Container>
       </Box>
+      </FullscreenSection>
 
-      <Box
-        sx={{
-          borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
-          borderBottom: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
-          backgroundColor: alpha(theme.palette.background.paper, 0.92),
-        }}
-      >
-        <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 4 } }}>
-          <Typography
-            variant="body1"
-            sx={{
-              maxWidth: 880,
-              color: theme.palette.text.primary,
-              fontSize: { xs: "1rem", md: "1.18rem" },
-            }}
-          >
-            An evolving archive of birds, wetlands, forests, and the fleeting moments that most people walk past.
-          </Typography>
-        </Container>
-      </Box>
+      <MotionReveal delay={40} sx={{ width: "100%" }}>
+        <Box
+          sx={{
+            borderTop: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
+            borderBottom: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+            backgroundColor: alpha(theme.palette.background.paper, 0.92),
+          }}
+        >
+          <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 4 } }}>
+            <Typography
+              variant="body1"
+              sx={{
+                maxWidth: 880,
+                color: theme.palette.text.primary,
+                fontSize: { xs: "1rem", md: "1.18rem" },
+              }}
+            >
+              Birds, wetlands, woods, and the kinds of moments that are easy to miss if you are not standing still for them.
+            </Typography>
+          </Container>
+        </Box>
+      </MotionReveal>
 
-      <Box id="archive" sx={{ pt: { xs: 7, md: 9 } }}>
+      <Box id="archive" sx={{ pt: { xs: 7, md: 9 }, width: "100%" }}>
         <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 } }}>
-          <Box sx={{ maxWidth: 620, mb: { xs: 4, md: 5 } }}>
+          <MotionParallax offset={72}>
+            <MotionReveal sx={{ maxWidth: 620, mb: { xs: 4, md: 5 } }}>
             <Typography variant="subtitle1" sx={{ color: theme.palette.primary.main, mb: 1.5 }}>
               Selected Archive
             </Typography>
@@ -205,23 +256,27 @@ function Home() {
                 color: theme.palette.text.primary,
               }}
             >
-              A fast first look into the public archive.
+              A few favorites from the public archive.
             </Typography>
             <Typography variant="body1" sx={{ color: theme.palette.text.secondary, mt: 1.5, maxWidth: 560 }}>
-              The homepage stays focused and responsive. The full archive lives on its own page for deeper browsing.
+              This is a small selection. The full archive has the rest if you want to spend more time with it.
             </Typography>
-          </Box>
+            </MotionReveal>
+          </MotionParallax>
         </Container>
         <MainImageDisplay photos={previewPhotos} loading={loading} variant="preview" />
         <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, pb: { xs: 2, md: 4 } }}>
-          <Button component={RouterLink} to="/archive" variant="outlined">
-            Open Full Archive
-          </Button>
+          <MotionReveal delay={60}>
+            <Button component={RouterLink} to="/archive" variant="outlined">
+              Open Full Archive
+            </Button>
+          </MotionReveal>
         </Container>
       </Box>
 
-      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 8, md: 11 } }}>
-        <Box
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 8, md: 11 }, width: "100%" }}>
+        <MotionParallax offset={48}>
+          <MotionReveal
           sx={{
             borderTop: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
             pt: { xs: 4, md: 5 },
@@ -238,8 +293,8 @@ function Home() {
               fontSize: { xs: "1rem", md: "1.1rem" },
             }}
           >
-            Most of this work begins the same way: standing still, waiting longer than expected, and paying attention
-            to movement before it happens.
+            Most of these photos start the same way: standing around longer than expected and waiting for something
+            small to happen.
           </Typography>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 4 }}>
             <Button component={RouterLink} to="/about" variant="text" color="primary" sx={{ px: 0, alignSelf: "flex-start" }}>
@@ -252,8 +307,10 @@ function Home() {
               Private gallery access
             </Button>
           </Stack>
-        </Box>
+          </MotionReveal>
+        </MotionParallax>
       </Container>
+      </Box>
     </>
   );
 }

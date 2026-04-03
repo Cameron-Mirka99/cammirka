@@ -7,8 +7,10 @@ import { useAuth } from "../auth/AuthProvider";
 import { authFetch } from "../utils/authFetch";
 import { photoApiBaseUrl } from "../utils/apiConfig";
 import { Header } from "../components/Header";
+import { MotionReveal, usePointerParallax } from "../utils/motion";
 
 export default function Login() {
+  const heroParallax = usePointerParallax(12);
   const location = useLocation();
   const navigate = useNavigate();
   const { status, refresh } = useAuth();
@@ -49,7 +51,7 @@ export default function Login() {
     const invite = params.get("invite");
     if (invite) {
       localStorage.setItem("inviteCode", invite);
-      setMessage("Invite detected. Complete sign-in to activate access.");
+      setMessage("Invite found. Sign in and I’ll connect your access automatically.");
     }
   }, [location.search]);
 
@@ -91,6 +93,8 @@ export default function Login() {
       <Header />
       <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 5, md: 8 } }}>
         <Box
+          {...heroParallax.interactiveProps}
+          style={heroParallax.style}
           sx={{
             maxWidth: 1120,
             mx: "auto",
@@ -101,6 +105,8 @@ export default function Login() {
             borderRadius: { xs: 4, md: 6 },
             overflow: "hidden",
             backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.76),
+            boxShadow: (theme) => `0 32px 80px ${alpha(theme.palette.common.black, theme.palette.mode === "light" ? 0.08 : 0.28)}`,
+            transform: "translate3d(0, 0, 0)",
           }}
         >
           <Box
@@ -114,8 +120,22 @@ export default function Login() {
               flexDirection: "column",
               justifyContent: "space-between",
               gap: 4,
+              position: "relative",
+              overflow: "hidden",
+              transform: "rotateX(calc(var(--motion-rotate-x, 0deg) * 0.35)) rotateY(calc(var(--motion-rotate-y, 0deg) * 0.42))",
+              transformStyle: "preserve-3d",
+              transition: "transform 220ms ease-out",
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                inset: "-20%",
+                background:
+                  "radial-gradient(circle at var(--motion-glow-x, 50%) var(--motion-glow-y, 50%), rgba(247, 241, 227, 0.18), transparent 26%)",
+                pointerEvents: "none",
+              },
             }}
           >
+            <MotionReveal delay={80}>
             <Box>
               <Typography variant="subtitle1" sx={{ color: alpha("#F7F1E3", 0.7), mb: 2 }}>
                 Private Gallery Access
@@ -128,7 +148,7 @@ export default function Login() {
                   maxWidth: 420,
                 }}
               >
-                Sign in to enter your private archive.
+                Sign in to open your private gallery.
               </Typography>
               <Typography
                 variant="body1"
@@ -138,31 +158,32 @@ export default function Login() {
                   color: alpha("#F7F1E3", 0.72),
                 }}
               >
-                Use your invite to unlock access to your gallery. Once signed in, you&apos;ll be taken directly to the
-                images available to your account.
+                If you came here from an invite, you&apos;re in the right place. Once you sign in, you&apos;ll be taken
+                straight to the photos tied to your account.
               </Typography>
             </Box>
+            </MotionReveal>
 
-            <Box sx={{ maxWidth: 420 }}>
+            <MotionReveal delay={220} sx={{ maxWidth: 420 }}>
               <Typography sx={{ fontSize: "0.76rem", letterSpacing: "0.14em", textTransform: "uppercase", color: alpha("#F7F1E3", 0.62), mb: 1.25 }}>
                 Access Notes
               </Typography>
               <Typography variant="body2" sx={{ color: alpha("#F7F1E3", 0.68) }}>
-                Invite links connect your account to the correct gallery folder. If you reached this page from an
-                invite, keep going through sign-in and the access will be applied automatically.
+                Invite links connect your account to the right gallery folder. If you landed here from one, just keep
+                going and the access will be applied automatically.
               </Typography>
-            </Box>
+            </MotionReveal>
           </Box>
 
-          <Box sx={{ px: { xs: 3, sm: 4, md: 5 }, py: { xs: 4, md: 5 }, color: "text.primary" }}>
+          <MotionReveal delay={180} sx={{ px: { xs: 3, sm: 4, md: 5 }, py: { xs: 4, md: 5 }, color: "text.primary" }}>
             <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1.5 }}>
               Account Access
             </Typography>
             <Typography variant="h4" sx={{ mb: 1.25, fontSize: { xs: "2rem", md: "2.6rem" } }}>
-              Continue to sign in
+              Welcome back
             </Typography>
             <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 520, mb: 3 }}>
-              Enter with your email and password, or create your account if this is your first time using an invite.
+              Sign in with your email and password, or create your account if this is your first time here.
             </Typography>
 
             {message && (
@@ -301,7 +322,7 @@ export default function Login() {
                 <Authenticator />
               </ThemeProvider>
             </Box>
-          </Box>
+          </MotionReveal>
         </Box>
       </Container>
     </>

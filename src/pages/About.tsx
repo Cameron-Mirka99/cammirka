@@ -11,8 +11,12 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
+import { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { Header } from "../components/Header";
+import { MotionParallax, MotionReveal, motionHoverLift, usePointerParallax } from "../utils/motion";
+import { photoApiBaseUrl } from "../utils/apiConfig";
+import { Photo } from "../types/photo";
 
 type LocationItem = {
   name: string;
@@ -25,6 +29,8 @@ type GearItem = {
 };
 
 function About() {
+  const heroParallax = usePointerParallax(14);
+  const [heroPhoto, setHeroPhoto] = useState<string | null>(null);
   const locations: LocationItem[] = [
     { name: "Olentangy Trail", query: "Olentangy Trail, Columbus, OH" },
     { name: "Highbanks Metro Park", query: "Highbanks Metro Park, Lewis Center, OH" },
@@ -37,7 +43,7 @@ function About() {
   const gearItems: GearItem[] = [
     { name: "Canon R5 Mark II", description: "Primary body for speed, reach, and low-light flexibility." },
     { name: "Canon RF 100-500mm F4.5-7.1 L IS USM", description: "The lens I rely on most for wildlife work." },
-    { name: "Canon EF 24-55mm f/5.6", description: "Used when the landscape matters as much as the subject." },
+    { name: "Canon RF 24-70mm F2.8 L is USM", description: "Used when the landscape matters as much as the subject." },
     { name: "Falcam TreeRoot F38 Pro Carbon Fiber Tripod", description: "Support for longer waits and steadier observation." },
     { name: "K&F Concept Hardshell Camera Backpack", description: "Carry setup for moving between trails and preserves." },
     { name: "Peak Design Cuff Camera Wrist Strap", description: "Simple, practical, and always attached." },
@@ -46,55 +52,136 @@ function About() {
   const mapsSearchUrl = (query: string) =>
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadHeroPhoto = async () => {
+      try {
+        if (!photoApiBaseUrl) return;
+
+        const res = await fetch(`${photoApiBaseUrl}/public-photos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ excludeKeys: [], limit: 6 }),
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const photos: Array<Photo> = Array.isArray(data.photos) ? data.photos : [];
+        const chosenPhoto = photos[1] ?? photos[0];
+
+        if (mounted && chosenPhoto) {
+          setHeroPhoto(chosenPhoto.url);
+        }
+      } catch {
+        // Leave the fallback hero styling in place if the fetch fails.
+      }
+    };
+
+    loadHeroPhoto();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <>
       <Header />
 
+      <Box>
       <Box
+        {...heroParallax.interactiveProps}
+        style={heroParallax.style}
         sx={{
-          minHeight: { xs: "82svh", md: "88svh" },
+          minHeight: { xs: "72svh", md: "76svh" },
           display: "flex",
           alignItems: "flex-end",
           position: "relative",
+          zIndex: 0,
           overflow: "hidden",
-          background:
-            "linear-gradient(180deg, rgba(10, 10, 8, 0.24) 0%, rgba(10, 10, 8, 0.72) 62%, rgba(10, 10, 8, 0.94) 100%), radial-gradient(circle at 82% 22%, rgba(184, 138, 42, 0.24), transparent 22%), radial-gradient(circle at 20% 72%, rgba(127, 138, 120, 0.16), transparent 30%), linear-gradient(135deg, #171713 0%, #0F0F0C 100%)",
+          perspective: "1600px",
+          backgroundColor: "#0F0F0C",
+          backgroundImage: heroPhoto
+            ? `linear-gradient(180deg, rgba(10, 10, 8, 0.2) 0%, rgba(10, 10, 8, 0.56) 48%, rgba(10, 10, 8, 0.94) 100%), linear-gradient(90deg, rgba(10, 10, 8, 0.56) 0%, rgba(10, 10, 8, 0.12) 46%, rgba(10, 10, 8, 0.5) 100%), url(${heroPhoto})`
+            : "linear-gradient(180deg, rgba(10, 10, 8, 0.24) 0%, rgba(10, 10, 8, 0.72) 62%, rgba(10, 10, 8, 0.94) 100%), linear-gradient(135deg, #171713 0%, #0F0F0C 100%)",
+          backgroundSize: "cover",
+          backgroundPosition: "center center",
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            inset: "-8%",
+            background:
+              "radial-gradient(circle at 76% 24%, rgba(184, 138, 42, 0.18), transparent 18%), radial-gradient(circle at 24% 70%, rgba(127, 138, 120, 0.14), transparent 24%)",
+            animation: "appGlowSweep 18s ease-in-out infinite",
+          },
         }}
       >
-        <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, pt: { xs: 16, md: 18 }, pb: { xs: 8, md: 10 } }}>
-          <Box sx={{ maxWidth: { xs: "100%", md: 760 } }}>
-            <Typography variant="subtitle1" sx={{ color: alpha("#F7F1E3", 0.74), mb: 2 }}>
-              About Cameron
-            </Typography>
-            <Typography
-              variant="h1"
-              sx={{
-                fontSize: { xs: "clamp(3rem, 13vw, 4.8rem)", md: "clamp(4.8rem, 9vw, 7rem)" },
-                color: "#F7F1E3",
-                maxWidth: 740,
-              }}
-            >
-              Looking for the stillness before movement.
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{
-                mt: 3,
-                maxWidth: 560,
-                color: alpha("#F7F1E3", 0.76),
-                fontSize: { xs: "1rem", md: "1.08rem" },
-              }}
-            >
-              I photograph wildlife across Central Ohio, usually by returning to the same trails, wetlands, and tree
-              lines until the ordinary starts to reveal something unexpected.
-            </Typography>
+        <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, pt: { xs: 14, md: 15 }, pb: { xs: 7, md: 8 } }}>
+          <Box
+            sx={{
+              maxWidth: { xs: "100%", md: 760 },
+              transform: "rotateX(calc(var(--motion-rotate-x, 0deg) * 0.4)) rotateY(calc(var(--motion-rotate-y, 0deg) * 0.5))",
+              transformStyle: "preserve-3d",
+              transition: "transform 220ms ease-out",
+            }}
+          >
+            <MotionReveal delay={80}>
+              <Typography variant="subtitle1" sx={{ color: alpha("#F7F1E3", 0.74), mb: 2 }}>
+                About Cameron
+              </Typography>
+            </MotionReveal>
+            <MotionReveal delay={160} distance={34}>
+              <Typography
+                variant="h1"
+                sx={{
+                  fontSize: { xs: "clamp(3rem, 13vw, 4.8rem)", md: "clamp(4.8rem, 9vw, 7rem)" },
+                  color: "#F7F1E3",
+                  maxWidth: 740,
+                }}
+              >
+                Looking for the stillness before movement.
+              </Typography>
+            </MotionReveal>
+            <MotionReveal delay={260}>
+              <Typography
+                variant="body1"
+                sx={{
+                  mt: 3,
+                  maxWidth: 560,
+                  color: alpha("#F7F1E3", 0.76),
+                  fontSize: { xs: "1rem", md: "1.08rem" },
+                }}
+              >
+                I photograph wildlife around Central Ohio, usually by going back to the same trails, wetlands, and tree
+                lines until something familiar starts to feel new again.
+              </Typography>
+            </MotionReveal>
           </Box>
         </Container>
       </Box>
 
-      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 7, md: 10 } }}>
+      <Box
+        sx={{
+          position: "relative",
+          zIndex: 1,
+          background: (theme) =>
+            `linear-gradient(180deg, ${alpha(theme.palette.background.default, 0.9)} 0%, ${alpha(theme.palette.background.default, 0.96)} 100%)`,
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at 12% 18%, rgba(184, 138, 42, 0.12), transparent 24%), radial-gradient(circle at 88% 34%, rgba(127, 138, 120, 0.09), transparent 26%)",
+            pointerEvents: "none",
+          },
+        }}
+      >
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 7, md: 10 }, width: "100%" }}>
         <Box sx={{ maxWidth: 1040, mx: "auto" }}>
-          <Box
+          <MotionParallax offset={44}>
+            <MotionReveal
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "1.1fr 0.9fr" },
@@ -114,16 +201,17 @@ function About() {
                   maxWidth: 620,
                 }}
               >
-                Wildlife photography became the way I learned to pay closer attention.
+                Wildlife photography became the thing that taught me how to slow down and notice more.
               </Typography>
               <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 630, mb: 3 }}>
-                I&apos;m Cameron Mirka, a Central Ohio-based photographer most at home outdoors. Birds are what pull me
-                back out the door most often, but the real draw is the combination of behavior, light, weather, and
-                place. The same trail can feel completely different from one morning to the next.
+                I&apos;m Cameron Mirka, a Central Ohio photographer who feels most at home outside. Birds are usually
+                what get me out the door, but what keeps me coming back is how different the same place can feel from
+                one morning to the next.
               </Typography>
               <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 630 }}>
-                What began as a slower way to spend time outside turned into a way of working. Photography gave me a
-                reason to return, wait longer, and notice more. The archive on this site is built out of that habit.
+                What started as a quieter way to spend time outdoors slowly turned into a way of seeing. Photography
+                gave me a reason to come back, wait longer, and pay closer attention. This archive is really just the
+                result of that habit.
               </Typography>
             </Box>
 
@@ -141,8 +229,8 @@ function About() {
                   What I look for
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Small shifts in posture, a pause before takeoff, fog lifting through the trees, or the brief
-                  alignment between subject and place.
+                  A change in posture, a pause before takeoff, fog moving through the trees, or one brief moment where
+                  the subject and the place line up just right.
                 </Typography>
               </Box>
               <Box>
@@ -151,16 +239,21 @@ function About() {
                   How I work
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Usually on foot, often early, returning to familiar locations until timing and observation do more
-                  than speed ever could.
+                  Usually on foot, usually early, and usually back in places I already know, trusting patience a little
+                  more than speed.
                 </Typography>
               </Box>
             </Box>
-          </Box>
+            </MotionReveal>
+          </MotionParallax>
+        </Box>
+      </Container>
 
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 7, md: 10 }, width: "100%" }}>
+        <Box sx={{ maxWidth: 1040, mx: "auto", width: "100%" }}>
           <Divider sx={{ my: { xs: 6, md: 8 }, borderColor: alpha("#B88A2A", 0.16) }} />
-
-          <Box
+          <MotionParallax offset={62}>
+            <MotionReveal
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "0.78fr 1.22fr" },
@@ -173,11 +266,11 @@ function About() {
                 Field Grounds
               </Typography>
               <Typography variant="h3" sx={{ fontSize: { xs: "clamp(2.1rem, 9vw, 3rem)", md: "clamp(3rem, 5vw, 3.9rem)" }, mb: 2 }}>
-                The places I return to most.
+                The places I come back to most.
               </Typography>
               <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 420 }}>
-                These are the locations that shape the archive most often. Repetition matters. Returning to the same
-                ground is how patterns start to emerge.
+                These spots shape a lot of the work on this site. Going back again and again is how patterns start to
+                show up.
               </Typography>
             </Box>
 
@@ -199,9 +292,10 @@ function About() {
                     borderTop: index === 0 ? (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.1)}` : "none",
                     borderBottom: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.1)}`,
                     color: "text.primary",
-                    transition: "color 180ms ease, background-color 180ms ease",
+                    ...motionHoverLift,
                     "&:hover": {
                       color: "primary.main",
+                      transform: "translateX(6px)",
                     },
                   }}
                 >
@@ -210,12 +304,17 @@ function About() {
                   <NorthEastIcon sx={{ fontSize: "1rem" }} />
                 </Box>
               ))}
-            </Box>
-          </Box>
+                </Box>
+              </MotionReveal>
+          </MotionParallax>
+        </Box>
+      </Container>
 
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 7, md: 10 }, width: "100%" }}>
+        <Box sx={{ maxWidth: 1040, mx: "auto", width: "100%" }}>
           <Divider sx={{ my: { xs: 6, md: 8 }, borderColor: alpha("#B88A2A", 0.16) }} />
-
-          <Box
+          <MotionParallax offset={56}>
+            <MotionReveal
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
@@ -227,16 +326,16 @@ function About() {
                 In The Field
               </Typography>
               <Typography variant="h3" sx={{ fontSize: { xs: "clamp(2.1rem, 9vw, 3rem)", md: "clamp(3rem, 5vw, 3.9rem)" }, mb: 2 }}>
-                Most good frames come from waiting longer than expected.
+                Most of my favorite frames come from waiting longer than I planned to.
               </Typography>
               <Typography variant="body1" sx={{ color: "text.secondary", mb: 2.5 }}>
-                Wildlife rarely offers the image you planned for. Most of the work is observation: learning where
-                subjects settle, how they move through a space, and when the light begins to support the moment instead
-                of flatten it.
+                Wildlife almost never gives you the photo you imagined ahead of time. Most of the work is just paying
+                attention: learning where something settles, how it moves through a space, and when the light finally
+                starts helping.
               </Typography>
               <Typography variant="body1" sx={{ color: "text.secondary" }}>
-                I&apos;m interested in behavior as much as appearance. A frame becomes more memorable when it carries
-                evidence of what the animal was doing, not just what it looked like.
+                I care as much about behavior as appearance. The photos I keep are usually the ones that say something
+                about what the animal was doing, not just what it looked like.
               </Typography>
             </Box>
 
@@ -246,6 +345,17 @@ function About() {
                 border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
                 borderRadius: 5,
                 p: { xs: 3, md: 4 },
+                position: "relative",
+                overflow: "hidden",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "linear-gradient(120deg, transparent 0%, rgba(184, 138, 42, 0.08) 35%, transparent 65%)",
+                  animation: "appGlowSweep 16s ease-in-out infinite",
+                  pointerEvents: "none",
+                },
               }}
             >
               <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 2 }}>
@@ -263,21 +373,25 @@ function About() {
                   </Box>
                 ))}
               </Stack>
-            </Box>
-          </Box>
+                </Box>
+              </MotionReveal>
+          </MotionParallax>
+        </Box>
+      </Container>
 
+      <Container maxWidth={false} sx={{ px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 7, md: 10 }, width: "100%" }}>
+        <Box sx={{ maxWidth: 1040, mx: "auto", width: "100%" }}>
           <Divider sx={{ my: { xs: 6, md: 8 }, borderColor: alpha("#B88A2A", 0.16) }} />
-
-          <Box sx={{ maxWidth: 760 }}>
+          <MotionReveal sx={{ maxWidth: 760 }}>
             <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1.5 }}>
               Next
             </Typography>
             <Typography variant="h3" sx={{ fontSize: { xs: "clamp(2.1rem, 9vw, 3rem)", md: "clamp(3rem, 5vw, 3.9rem)" }, mb: 2 }}>
-              The archive is still growing.
+              The archive is still growing, a little at a time.
             </Typography>
             <Typography variant="body1" sx={{ color: "text.secondary", maxWidth: 620 }}>
-              New mornings, repeated routes, and small changes in season continue to reshape the work. The best way to
-              understand it is still to spend time with the photographs themselves.
+              New mornings, repeated routes, and small seasonal shifts keep changing the work. The best way to get a
+              feel for it is still to spend some time with the photos themselves.
             </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 4 }}>
               <Button component={RouterLink} to="/" variant="contained" color="primary" sx={{ color: "#0F0F0C", alignSelf: "flex-start" }}>
@@ -287,9 +401,11 @@ function About() {
                 Private gallery access
               </Button>
             </Stack>
-          </Box>
+          </MotionReveal>
         </Box>
       </Container>
+      </Box>
+      </Box>
     </>
   );
 }
