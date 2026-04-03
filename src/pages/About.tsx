@@ -77,15 +77,32 @@ function About() {
           sx={{
             position: "relative",
             zIndex: 1,
+            overflow: "hidden",
+            isolation: "isolate",
             background: (theme) =>
-              `linear-gradient(180deg, rgba(243, 238, 227, 0.9) 0%, rgba(243, 238, 227, 0.96) 100%)`,
+              `linear-gradient(180deg, ${theme.palette.mode === "light" ? "rgba(24, 22, 18, 0.84)" : "rgba(15, 15, 12, 0.82)"} 0%, ${theme.palette.mode === "light" ? "rgba(29, 27, 22, 0.9)" : "rgba(18, 18, 15, 0.9)"} 36%, ${theme.palette.mode === "light" ? "rgba(18, 17, 14, 0.96)" : "rgba(12, 12, 10, 0.96)"} 100%)`,
+            backdropFilter: "blur(12px)",
+            "& > *": {
+              position: "relative",
+              zIndex: 1,
+            },
             "&::before": {
               content: '""',
               position: "absolute",
               inset: 0,
               background:
-                "radial-gradient(circle at 12% 18%, rgba(184, 138, 42, 0.12), transparent 24%), radial-gradient(circle at 88% 34%, rgba(127, 138, 120, 0.09), transparent 26%)",
+                "radial-gradient(circle at 14% 16%, rgba(184, 138, 42, 0.18), transparent 24%), radial-gradient(circle at 82% 28%, rgba(127, 138, 120, 0.14), transparent 28%), radial-gradient(circle at 68% 78%, rgba(184, 138, 42, 0.1), transparent 20%)",
               pointerEvents: "none",
+              zIndex: 0,
+            },
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(247, 241, 227, 0.03) 0%, rgba(15, 15, 12, 0) 24%, rgba(15, 15, 12, 0.14) 100%)",
+              pointerEvents: "none",
+              zIndex: 0,
             },
           }}
         >
