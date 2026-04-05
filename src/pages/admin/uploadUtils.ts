@@ -2,6 +2,15 @@ const MAX_UPLOAD_REQUEST_BYTES = 10 * 1024 * 1024;
 
 export async function buildUploadRequestBody(folderId: string, files: File[]) {
   const images = await Promise.all(files.map((file) => buildUploadPayload(file)));
+  return buildUploadRequest(folderId, images);
+}
+
+export async function buildSingleUploadRequestBody(folderId: string, file: File) {
+  const image = await buildUploadPayload(file);
+  return buildUploadRequest(folderId, [image]);
+}
+
+function buildUploadRequest(folderId: string, images: Awaited<ReturnType<typeof buildUploadPayload>>[]) {
   const requestBody = JSON.stringify({ folderId, images });
   const requestBytes = new Blob([requestBody]).size;
 

@@ -15,7 +15,7 @@ import { FoldersSidebar } from "./admin/FoldersSidebar";
 import { UserDirectorySection } from "./admin/UserDirectorySection";
 import { UploadPhotoSection } from "./admin/UploadPhotoSection";
 import { UploadErrorToast } from "./admin/UploadErrorToast";
-import { buildUploadRequestBody, exceedsUploadLimit, formatBytes, getUploadLimitBytes } from "./admin/uploadUtils";
+import { buildSingleUploadRequestBody, exceedsUploadLimit, formatBytes, getUploadLimitBytes } from "./admin/uploadUtils";
 import { FolderSummary, FolderUser } from "./admin/types";
 import { MotionReveal } from "../utils/motion";
 
@@ -28,6 +28,7 @@ export default function Admin() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [uploadFolderId, setUploadFolderId] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadErrorToast, setUploadErrorToast] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
@@ -300,44 +301,75 @@ export default function Admin() {
       setUploadErrorToast(message);
       return;
     }
+    if (uploadLoading) {
+      return;
+    }
 
+    setUploadLoading(true);
     try {
-      const { requestBody, requestBytes } = await buildUploadRequestBody(uploadFolderId, uploadFiles);
-      if (exceedsUploadLimit(requestBytes)) {
-        const message = `Upload request exceeds ${formatBytes(getUploadLimitBytes())} (${formatBytes(requestBytes)}). Try fewer files or smaller images.`;
-        setStatusMessage(message);
-        setUploadErrorToast(message);
-        return;
+      const totalFiles = uploadFiles.length;
+      const uploadedFiles: string[] = [];
+      const failedFiles: string[] = [];
+
+      for (const [index, file] of uploadFiles.entries()) {
+        setStatusMessage(`Uploading ${index + 1} of ${totalFiles}: ${file.name}`);
+
+        const { requestBody, requestBytes } = await buildSingleUploadRequestBody(uploadFolderId, file);
+        if (exceedsUploadLimit(requestBytes)) {
+          failedFiles.push(
+            `${file.name} (request size ${formatBytes(requestBytes)} exceeds ${formatBytes(getUploadLimitBytes())})`,
+          );
+          continue;
+        }
+
+        const res = await authFetch(`${apiBase}/upload-image`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          const responseMessage = [
+            payload?.message,
+            payload?.error,
+            typeof payload?.details === "string" ? payload.details : null,
+          ]
+            .filter(Boolean)
+            .join(" ");
+          failedFiles.push(`${file.name} (${responseMessage || `HTTP ${res.status}`})`);
+          continue;
+        }
+
+        uploadedFiles.push(file.name);
       }
 
-      const res = await authFetch(`${apiBase}/upload-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: requestBody,
-      });
-      const payload = await res.json().catch(() => null);
-      if (!res.ok) {
-        const responseMessage = [
-          payload?.message,
-          payload?.error,
-          typeof payload?.details === "string" ? payload.details : null,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const message = responseMessage || `Upload failed (HTTP ${res.status}).`;
-        setStatusMessage(message);
-        setUploadErrorToast(message);
-        return;
+      if (uploadedFiles.length > 0) {
+        setUploadFiles([]);
       }
-      setStatusMessage(payload.message ?? "Upload complete.");
-      setUploadFiles([]);
-      if (selectedFolder && uploadFolderId && selectedFolder === uploadFolderId) {
+
+      if (uploadedFiles.length > 0 && selectedFolder && uploadFolderId && selectedFolder === uploadFolderId) {
         loadFolderItems(selectedFolder).catch(() => undefined);
       }
+
+      if (failedFiles.length === 0) {
+        setStatusMessage(
+          uploadedFiles.length === 1 ? `Uploaded ${uploadedFiles[0]}.` : `Uploaded ${uploadedFiles.length} files.`,
+        );
+        return;
+      }
+
+      const summary = [
+        uploadedFiles.length > 0 ? `Uploaded ${uploadedFiles.length} of ${totalFiles} files.` : "No files were uploaded.",
+        `Failed: ${failedFiles.join("; ")}`,
+      ].join(" ");
+      setStatusMessage(summary);
+      setUploadErrorToast(summary);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed.";
       setStatusMessage(message);
       setUploadErrorToast(message);
+    } finally {
+      setUploadLoading(false);
     }
   };
 
@@ -848,6 +880,7 @@ export default function Admin() {
                 <UploadPhotoSection
                   uploadFolderId={uploadFolderId}
                   uploadFiles={uploadFiles}
+                  uploadLoading={uploadLoading}
                   mutedText={mutedText}
                   setUploadFolderId={setUploadFolderId}
                   setUploadFiles={setUploadFiles}

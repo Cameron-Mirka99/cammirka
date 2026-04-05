@@ -3,6 +3,7 @@ import { Box, Button, TextField, Typography } from "@mui/material";
 type UploadPhotoSectionProps = {
   uploadFolderId: string;
   uploadFiles: File[];
+  uploadLoading: boolean;
   mutedText: string;
   setUploadFolderId: (value: string) => void;
   setUploadFiles: (files: File[]) => void;
@@ -12,6 +13,7 @@ type UploadPhotoSectionProps = {
 export function UploadPhotoSection({
   uploadFolderId,
   uploadFiles,
+  uploadLoading,
   mutedText,
   setUploadFolderId,
   setUploadFiles,
@@ -36,21 +38,23 @@ export function UploadPhotoSection({
           label="Folder ID"
           value={uploadFolderId}
           onChange={(event) => setUploadFolderId(event.target.value)}
+          disabled={uploadLoading}
           sx={{ minWidth: 240 }}
           InputLabelProps={{ sx: { color: "text.secondary" } }}
           InputProps={{ sx: { color: "text.primary" } }}
         />
-        <Button variant="outlined" component="label">
-          Choose files
+        <Button variant="outlined" component="label" disabled={uploadLoading}>
+          {uploadLoading ? "Preparing..." : "Choose files"}
           <input
             type="file"
             hidden
             multiple
+            disabled={uploadLoading}
             onChange={(event) => setUploadFiles(Array.from(event.target.files ?? []))}
           />
         </Button>
-        <Button variant="contained" onClick={onUpload}>
-          Upload
+        <Button variant="contained" onClick={onUpload} disabled={uploadLoading || uploadFiles.length === 0}>
+          {uploadLoading ? "Uploading..." : "Upload"}
         </Button>
       </Box>
       {uploadFiles.length > 0 && (
