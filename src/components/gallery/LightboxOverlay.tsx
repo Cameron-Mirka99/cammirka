@@ -1,11 +1,15 @@
 import CloseIcon from "@mui/icons-material/Close";
+import DownloadIcon from "@mui/icons-material/Download";
 import EastIcon from "@mui/icons-material/East";
 import WestIcon from "@mui/icons-material/West";
 import {
   Backdrop,
   Box,
+  Button,
   Fade,
   IconButton,
+  useMediaQuery,
+  useTheme,
   Portal,
   Typography,
 } from "@mui/material";
@@ -13,18 +17,24 @@ import { alpha } from "@mui/material/styles";
 import React from "react";
 import { Photo } from "../../types/photo";
 import photoCache from "../../utils/photoCache";
+import { photoApiBaseUrl } from "../../utils/apiConfig";
+import { authFetch } from "../../utils/authFetch";
 
 type LightboxOverlayProps = {
   photos: Array<Photo>;
   selectedIndex: number | null;
   setSelectedIndex: React.Dispatch<React.SetStateAction<number | null>>;
+  showDownload?: boolean;
 };
 
 export function LightboxOverlay({
   photos,
   selectedIndex,
   setSelectedIndex,
+  showDownload = false,
 }: LightboxOverlayProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [zoom, setZoom] = React.useState(1);
   const [pan, setPan] = React.useState({ x: 0, y: 0 });
   const [imageSurface, setImageSurface] = React.useState({ width: 0, height: 0 });
@@ -36,8 +46,18 @@ export function LightboxOverlay({
     originX: 0,
     originY: 0,
   });
+  const [swipeStart, setSwipeStart] = React.useState<{ x: number; y: number } | null>(null);
+  const [downloading, setDownloading] = React.useState(false);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
   const selectedPhoto = selectedIndex !== null ? photos[selectedIndex] : null;
+
+  const goToPrevious = React.useCallback(() => {
+    setSelectedIndex((current) => (current === null ? current : (current - 1 + photos.length) % photos.length));
+  }, [photos.length, setSelectedIndex]);
+
+  const goToNext = React.useCallback(() => {
+    setSelectedIndex((current) => (current === null ? current : (current + 1) % photos.length));
+  }, [photos.length, setSelectedIndex]);
 
   const clampZoom = (value: number) => Math.min(4, Math.max(1, value));
   const clampPan = (value: number, axis: "x" | "y", currentZoom: number) => {
@@ -54,21 +74,15 @@ export function LightboxOverlay({
       if (event.key === "Escape") {
         setSelectedIndex(null);
       } else if (event.key === "ArrowRight") {
-        setSelectedIndex((current) => {
-          if (current === null) return current;
-          return (current + 1) % photos.length;
-        });
+        goToNext();
       } else if (event.key === "ArrowLeft") {
-        setSelectedIndex((current) => {
-          if (current === null) return current;
-          return (current - 1 + photos.length) % photos.length;
-        });
+        goToPrevious();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [photos.length, selectedIndex, setSelectedIndex]);
+  }, [goToNext, goToPrevious, selectedIndex, setSelectedIndex]);
 
   React.useEffect(() => {
     if (selectedIndex === null) return undefined;
@@ -184,6 +198,73 @@ export function LightboxOverlay({
     setDragState((current) => ({ ...current, active: false }));
   };
 
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (zoom > 1 || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    setSwipeStart({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!swipeStart || zoom > 1) {
+      setSwipeStart(null);
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - swipeStart.x;
+    const deltaY = touch.clientY - swipeStart.y;
+
+    if (Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX > 0) {
+        goToPrevious();
+      } else {
+        goToNext();
+      }
+    }
+
+    setSwipeStart(null);
+  };
+
+  const handleDownload = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!selectedPhoto || downloading) return;
+
+    setDownloading(true);
+    try {
+      if (!photoApiBaseUrl) {
+        throw new Error("REACT_APP_PHOTO_API_URL is not configured");
+      }
+
+      const response = await authFetch(`${photoApiBaseUrl}/photo-download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storageKey: selectedPhoto.storageKey ?? selectedPhoto.key,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const payload = await response.json();
+      if (typeof payload?.url !== "string" || !payload.url) {
+        throw new Error("Download URL missing from response.");
+      }
+
+      const anchor = document.createElement("a");
+      anchor.href = payload.url;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to download image:", error);
+      window.open(selectedPhoto.url, "_blank", "noopener,noreferrer");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <Portal>
       <Backdrop
@@ -229,24 +310,30 @@ export function LightboxOverlay({
               <>
                 <IconButton
                   aria-label="Previous image"
-                  onClick={() => setSelectedIndex((current) => (current === null ? current : (current - 1 + photos.length) % photos.length))}
+                  onClick={goToPrevious}
                   sx={{
                     position: "absolute",
                     left: { xs: 10, md: 24 },
+                    top: "50%",
+                    transform: "translateY(-50%)",
                     color: "#F7F1E3",
                     backgroundColor: alpha("#F7F1E3", 0.08),
+                    display: { xs: "none", sm: "inline-flex" },
                   }}
                 >
                   <WestIcon />
                 </IconButton>
                 <IconButton
                   aria-label="Next image"
-                  onClick={() => setSelectedIndex((current) => (current === null ? current : (current + 1) % photos.length))}
+                  onClick={goToNext}
                   sx={{
                     position: "absolute",
                     right: { xs: 10, md: 24 },
+                    top: "50%",
+                    transform: "translateY(-50%)",
                     color: "#F7F1E3",
                     backgroundColor: alpha("#F7F1E3", 0.08),
+                    display: { xs: "none", sm: "inline-flex" },
                   }}
                 >
                   <EastIcon />
@@ -298,6 +385,8 @@ export function LightboxOverlay({
                     onPointerUp={endDrag}
                     onPointerCancel={endDrag}
                     onPointerLeave={endDrag}
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
                     onClick={(event) => {
                       event.stopPropagation();
                       if (dragState.moved) return;
@@ -342,19 +431,82 @@ export function LightboxOverlay({
                     width: "100%",
                     maxWidth: "100%",
                     display: "flex",
-                    justifyContent: "space-between",
+                    justifyContent: photos.length > 1 && isMobile ? "center" : "space-between",
                     gap: 2,
                     alignItems: "center",
                     px: { xs: 0.5, md: 0 },
+                    flexDirection: { xs: "column", sm: "row" },
                     mx: "auto",
                   }}
                 >
                   <Typography sx={{ color: alpha("#F7F1E3", 0.76), letterSpacing: "0.14em", textTransform: "uppercase", fontSize: "0.7rem" }}>
                     Frame {selectedIndex! + 1} of {photos.length}
                   </Typography>
-                  <Typography sx={{ color: alpha("#F7F1E3", 0.54), fontSize: "0.82rem" }}>
-                    Use arrow keys to move and the scroll wheel to zoom
-                  </Typography>
+                  {photos.length > 1 && isMobile && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                      }}
+                    >
+                      <IconButton
+                        aria-label="Previous image"
+                        onClick={goToPrevious}
+                        sx={{
+                          color: "#F7F1E3",
+                          backgroundColor: alpha("#F7F1E3", 0.08),
+                        }}
+                      >
+                        <WestIcon />
+                      </IconButton>
+                      <Typography sx={{ color: alpha("#F7F1E3", 0.68), fontSize: "0.76rem", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                        Swipe or tap
+                      </Typography>
+                      <IconButton
+                        aria-label="Next image"
+                        onClick={goToNext}
+                        sx={{
+                          color: "#F7F1E3",
+                          backgroundColor: alpha("#F7F1E3", 0.08),
+                        }}
+                      >
+                        <EastIcon />
+                      </IconButton>
+                    </Box>
+                  )}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.25,
+                      flexWrap: "wrap",
+                      justifyContent: { xs: "center", sm: "flex-end" },
+                    }}
+                  >
+                    {showDownload && selectedPhoto && (
+                      <Button
+                        startIcon={<DownloadIcon />}
+                        variant="outlined"
+                        size="small"
+                        onClick={handleDownload}
+                        sx={{
+                          color: "#F7F1E3",
+                          borderColor: alpha("#F7F1E3", 0.24),
+                          backgroundColor: alpha("#F7F1E3", 0.05),
+                          "&:hover": {
+                            borderColor: alpha("#F7F1E3", 0.4),
+                            backgroundColor: alpha("#F7F1E3", 0.1),
+                          },
+                        }}
+                      >
+                        {downloading ? "Downloading..." : "Download full resolution"}
+                      </Button>
+                    )}
+                    <Typography sx={{ color: alpha("#F7F1E3", 0.54), fontSize: "0.82rem" }}>
+                      {isMobile ? "Swipe to move and tap the image to zoom" : "Use arrow keys to move and the scroll wheel to zoom"}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             )}

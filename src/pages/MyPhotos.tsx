@@ -37,6 +37,13 @@ export default function MyPhotos() {
     () => Boolean(user?.groups.includes("admin")),
     [user?.groups],
   );
+  const privateGalleryLabel = useMemo(() => {
+    const fullName = [user?.givenName, user?.familyName].filter(Boolean).join(" ").trim();
+    if (fullName) {
+      return `${fullName}'s Private Gallery`;
+    }
+    return "Private Gallery";
+  }, [user?.familyName, user?.givenName]);
 
   const setActiveFolder = useCallback((folderId: string | undefined) => {
     activeFolderRef.current = folderId;
@@ -238,7 +245,7 @@ export default function MyPhotos() {
         >
           <Box sx={{ maxWidth: 620 }}>
             <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
-              Private Gallery
+              {privateGalleryLabel}
             </Typography>
             <Typography variant="h4" sx={{ color: "text.primary", fontSize: { xs: "2rem", md: "2.8rem" }, mb: 1 }}>
               My Photos

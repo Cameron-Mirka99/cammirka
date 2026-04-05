@@ -26,6 +26,7 @@ import { createInvite } from "./functions/createInvite/resource.js";
 import { deleteFolder } from "./functions/deleteFolder/resource.js";
 import { deletePhoto } from "./functions/deletePhoto/resource.js";
 import { duplicatePhoto } from "./functions/duplicatePhoto/resource.js";
+import { getPhotoDownloadUrl } from "./functions/getPhotoDownloadUrl/resource.js";
 import { getPhotoList } from "./functions/getPhotoList/resource.js";
 import { listUserFolders } from "./functions/listUserFolders/resource.js";
 import { listAllUsers } from "./functions/listAllUsers/resource.js";
@@ -48,6 +49,7 @@ const backend = defineBackend({
   deleteFolder,
   deletePhoto,
   duplicatePhoto,
+  getPhotoDownloadUrl,
   getPhotoList,
   listAllUsers,
   listUserFolders,
@@ -113,6 +115,7 @@ const distribution = new Distribution(infraStack, "PhotoAssetsDistribution", {
 
 photoBucket.grantRead(originAccessIdentity);
 photoBucket.grantReadWrite(backend.uploadImageFunction.resources.lambda);
+photoBucket.grantRead(backend.getPhotoDownloadUrl.resources.lambda);
 photoBucket.grantRead(backend.getPhotoList.resources.lambda);
 photoBucket.grantReadWrite(backend.movePhoto.resources.lambda);
 photoBucket.grantRead(backend.publicPhotos.resources.lambda);
@@ -137,6 +140,14 @@ backend.getPhotoList.addEnvironment(
   distribution.domainName,
 );
 backend.getPhotoList.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
+backend.getPhotoDownloadUrl.addEnvironment(
+  "BUCKET_NAME",
+  photoBucket.bucketName,
+);
+backend.getPhotoDownloadUrl.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
 );
@@ -262,6 +273,7 @@ folderUsersTable.grantReadWriteData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.backfillFolderUsers.resources.lambda);
 folderUsersTable.grantReadData(backend.listUserFolders.resources.lambda);
+folderUsersTable.grantReadData(backend.getPhotoDownloadUrl.resources.lambda);
 folderUsersTable.grantReadData(backend.getPhotoList.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.addFolderUser.resources.lambda);
@@ -341,6 +353,15 @@ photosResource.addMethod("GET", listPhotosIntegration, {
   authorizer,
 });
 photosResource.addMethod("POST", listPhotosIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const photoDownloadIntegration = new LambdaIntegration(
+  backend.getPhotoDownloadUrl.resources.lambda,
+);
+const photoDownloadResource = restApi.root.addResource("photo-download");
+photoDownloadResource.addMethod("POST", photoDownloadIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

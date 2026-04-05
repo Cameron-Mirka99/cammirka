@@ -122,7 +122,12 @@ export const MainImageDisplay = ({
         )}
       </Container>
 
-      <LightboxOverlay photos={photos} selectedIndex={selectedIndex} setSelectedIndex={setSelectedIndex} />
+      <LightboxOverlay
+        photos={photos}
+        selectedIndex={selectedIndex}
+        setSelectedIndex={setSelectedIndex}
+        showDownload={variant === "private"}
+      />
     </>
   );
 };

@@ -116,8 +116,13 @@ export default function Account() {
                 label="Email address"
                 value={user?.email ?? ""}
                 size="small"
-                InputProps={{ readOnly: true }}
+                disabled
                 helperText="This email address is fixed for your account."
+                sx={{
+                  "& .MuiInputBase-input.Mui-disabled": {
+                    WebkitTextFillColor: (theme) => theme.palette.text.primary,
+                  },
+                }}
               />
               <TextField
                 label="First name"
