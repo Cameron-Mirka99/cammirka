@@ -37,7 +37,6 @@ export function LightboxOverlay({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [zoom, setZoom] = React.useState(1);
   const [pan, setPan] = React.useState({ x: 0, y: 0 });
-  const [imageSurface, setImageSurface] = React.useState({ width: 0, height: 0 });
   const [dragState, setDragState] = React.useState({
     active: false,
     moved: false,
@@ -106,7 +105,6 @@ export function LightboxOverlay({
   React.useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    setImageSurface({ width: 0, height: 0 });
     setDragState({
       active: false,
       moved: false,
@@ -116,29 +114,6 @@ export function LightboxOverlay({
       originY: 0,
     });
   }, [selectedIndex]);
-
-  React.useEffect(() => {
-    const imageElement = imageRef.current;
-    if (!imageElement) return undefined;
-
-    const updateSurface = () => {
-      setImageSurface({
-        width: imageElement.clientWidth,
-        height: imageElement.clientHeight,
-      });
-    };
-
-    updateSurface();
-
-    const resizeObserver = new ResizeObserver(() => updateSurface());
-    resizeObserver.observe(imageElement);
-    window.addEventListener("resize", updateSurface);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", updateSurface);
-    };
-  }, [selectedPhoto]);
 
   const handleZoomWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -265,6 +240,21 @@ export function LightboxOverlay({
     }
   };
 
+  const handlePreviousClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    goToPrevious();
+  };
+
+  const handleNextClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    goToNext();
+  };
+
+  const handleCloseClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setSelectedIndex(null);
+  };
+
   return (
     <Portal>
       <Backdrop
@@ -294,7 +284,7 @@ export function LightboxOverlay({
           >
             <IconButton
               aria-label="Close image"
-              onClick={() => setSelectedIndex(null)}
+              onClick={handleCloseClick}
               sx={{
                 position: "absolute",
                 top: { xs: 12, md: 24 },
@@ -310,7 +300,7 @@ export function LightboxOverlay({
               <>
                 <IconButton
                   aria-label="Previous image"
-                  onClick={goToPrevious}
+                  onClick={handlePreviousClick}
                   sx={{
                     position: "absolute",
                     left: { xs: 10, md: 24 },
@@ -325,7 +315,7 @@ export function LightboxOverlay({
                 </IconButton>
                 <IconButton
                   aria-label="Next image"
-                  onClick={goToNext}
+                  onClick={handleNextClick}
                   sx={{
                     position: "absolute",
                     right: { xs: 10, md: 24 },
@@ -373,8 +363,8 @@ export function LightboxOverlay({
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      width: imageSurface.width > 0 ? `${imageSurface.width}px` : "auto",
-                      height: imageSurface.height > 0 ? `${imageSurface.height}px` : "auto",
+                      width: "100%",
+                      height: "100%",
                       maxWidth: "100%",
                       maxHeight: "100%",
                       cursor: zoom > 1 ? (dragState.active ? "grabbing" : "grab") : "zoom-in",
@@ -452,7 +442,7 @@ export function LightboxOverlay({
                     >
                       <IconButton
                         aria-label="Previous image"
-                        onClick={goToPrevious}
+                        onClick={handlePreviousClick}
                         sx={{
                           color: "#F7F1E3",
                           backgroundColor: alpha("#F7F1E3", 0.08),
@@ -465,7 +455,7 @@ export function LightboxOverlay({
                       </Typography>
                       <IconButton
                         aria-label="Next image"
-                        onClick={goToNext}
+                        onClick={handleNextClick}
                         sx={{
                           color: "#F7F1E3",
                           backgroundColor: alpha("#F7F1E3", 0.08),
