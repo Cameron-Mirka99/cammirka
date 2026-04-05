@@ -2,6 +2,7 @@ import { defineBackend } from "@aws-amplify/backend";
 import { Stack } from "aws-cdk-lib";
 import {
   AuthorizationType,
+  CognitoUserPoolsAuthorizer,
   Cors,
   LambdaIntegration,
   RestApi,
@@ -14,7 +15,9 @@ import {
   ProjectionType,
   Table,
 } from "aws-cdk-lib/aws-dynamodb";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Bucket } from "aws-cdk-lib/aws-s3";
+import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
 import { addFolderUser } from "./functions/addFolderUser/resource.js";
 import { backfillFolderUsers } from "./functions/backfillFolderUsers/resource.js";
@@ -36,6 +39,7 @@ import { updateUser } from "./functions/updateUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
 const backend = defineBackend({
+  auth,
   acceptInvite,
   addFolderUser,
   backfillFolderUsers,
@@ -179,6 +183,10 @@ backend.acceptInvite.addEnvironment(
   invitesTable.tableName,
 );
 backend.acceptInvite.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
+backend.acceptInvite.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
 );
@@ -187,8 +195,16 @@ backend.acceptInvite.addEnvironment(
   bannedFolderUsersTable.tableName,
 );
 backend.backfillFolderUsers.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
+backend.backfillFolderUsers.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
+);
+backend.listFolderUsers.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
 );
 backend.listFolderUsers.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
@@ -197,6 +213,14 @@ backend.listFolderUsers.addEnvironment(
 backend.listFolderUsers.addEnvironment(
   "BANNED_USERS_TABLE_NAME",
   bannedFolderUsersTable.tableName,
+);
+backend.listAllUsers.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
+backend.updateUser.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
 );
 backend.listUserFolders.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
@@ -248,6 +272,44 @@ bannedFolderUsersTable.grantReadWriteData(backend.removeFolderUser.resources.lam
 bannedFolderUsersTable.grantReadWriteData(backend.unbanFolderUser.resources.lambda);
 bannedFolderUsersTable.grantReadWriteData(backend.addFolderUser.resources.lambda);
 
+backend.acceptInvite.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: [
+      "cognito-idp:AdminUpdateUserAttributes",
+      "cognito-idp:AdminAddUserToGroup",
+    ],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.listFolderUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:AdminGetUser"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.backfillFolderUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:ListUsers"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.listAllUsers.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:ListUsers"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.updateUser.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:AdminUpdateUserAttributes"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
 const restApi = new RestApi(apiStack, "PhotoApi", {
   restApiName: "photo-site-api",
   defaultCorsPreflightOptions: {
@@ -256,19 +318,31 @@ const restApi = new RestApi(apiStack, "PhotoApi", {
   },
 });
 
+const authorizer = new CognitoUserPoolsAuthorizer(
+  apiStack,
+  "PhotoApiAuthorizer",
+  {
+    cognitoUserPools: [backend.auth.resources.userPool],
+  },
+);
+authorizer._attachToApi(restApi);
+
 const uploadImageIntegration = new LambdaIntegration(backend.uploadImageFunction.resources.lambda);
 const uploadResource = restApi.root.addResource("upload-image");
 uploadResource.addMethod("POST", uploadImageIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const listPhotosIntegration = new LambdaIntegration(backend.getPhotoList.resources.lambda);
 const photosResource = restApi.root.addResource("photos");
 photosResource.addMethod("GET", listPhotosIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 photosResource.addMethod("POST", listPhotosIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const publicPhotosIntegration = new LambdaIntegration(
@@ -285,23 +359,27 @@ publicPhotosResource.addMethod("POST", publicPhotosIntegration, {
 const foldersIntegration = new LambdaIntegration(backend.createFolder.resources.lambda);
 const foldersResource = restApi.root.addResource("folders");
 foldersResource.addMethod("POST", foldersIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 const listFoldersIntegration = new LambdaIntegration(backend.listFolders.resources.lambda);
 foldersResource.addMethod("GET", listFoldersIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 const deleteFolderIntegration = new LambdaIntegration(
   backend.deleteFolder.resources.lambda,
 );
 foldersResource.addMethod("DELETE", deleteFolderIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const invitesIntegration = new LambdaIntegration(backend.createInvite.resources.lambda);
 const invitesResource = restApi.root.addResource("invites");
 invitesResource.addMethod("POST", invitesIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const listFolderUsersIntegration = new LambdaIntegration(
@@ -309,7 +387,8 @@ const listFolderUsersIntegration = new LambdaIntegration(
 );
 const folderUsersResource = restApi.root.addResource("folder-users");
 folderUsersResource.addMethod("GET", listFolderUsersIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const listAllUsersIntegration = new LambdaIntegration(
@@ -317,12 +396,14 @@ const listAllUsersIntegration = new LambdaIntegration(
 );
 const usersResource = restApi.root.addResource("users");
 usersResource.addMethod("GET", listAllUsersIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 const updateUserIntegration = new LambdaIntegration(backend.updateUser.resources.lambda);
 const updateUserResource = usersResource.addResource("update");
 updateUserResource.addMethod("POST", updateUserIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const listUserFoldersIntegration = new LambdaIntegration(
@@ -330,7 +411,8 @@ const listUserFoldersIntegration = new LambdaIntegration(
 );
 const userFoldersResource = restApi.root.addResource("user-folders");
 userFoldersResource.addMethod("GET", listUserFoldersIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const removeFolderUserIntegration = new LambdaIntegration(
@@ -338,7 +420,8 @@ const removeFolderUserIntegration = new LambdaIntegration(
 );
 const removeFolderUserResource = restApi.root.addResource("folder-users-remove");
 removeFolderUserResource.addMethod("POST", removeFolderUserIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const addFolderUserIntegration = new LambdaIntegration(
@@ -346,7 +429,8 @@ const addFolderUserIntegration = new LambdaIntegration(
 );
 const addFolderUserResource = restApi.root.addResource("folder-users-add");
 addFolderUserResource.addMethod("POST", addFolderUserIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const unbanFolderUserIntegration = new LambdaIntegration(
@@ -354,7 +438,8 @@ const unbanFolderUserIntegration = new LambdaIntegration(
 );
 const unbanFolderUserResource = restApi.root.addResource("folder-users-unban");
 unbanFolderUserResource.addMethod("POST", unbanFolderUserIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const backfillFolderUsersIntegration = new LambdaIntegration(
@@ -362,31 +447,36 @@ const backfillFolderUsersIntegration = new LambdaIntegration(
 );
 const backfillFolderUsersResource = restApi.root.addResource("folder-users-backfill");
 backfillFolderUsersResource.addMethod("POST", backfillFolderUsersIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const acceptInviteIntegration = new LambdaIntegration(backend.acceptInvite.resources.lambda);
 const acceptInviteResource = restApi.root.addResource("accept-invite");
 acceptInviteResource.addMethod("POST", acceptInviteIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const movePhotoIntegration = new LambdaIntegration(backend.movePhoto.resources.lambda);
 const movePhotoResource = restApi.root.addResource("move-photo");
 movePhotoResource.addMethod("POST", movePhotoIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const deletePhotoIntegration = new LambdaIntegration(backend.deletePhoto.resources.lambda);
 const deletePhotoResource = restApi.root.addResource("delete-photo");
 deletePhotoResource.addMethod("POST", deletePhotoIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 const duplicatePhotoIntegration = new LambdaIntegration(backend.duplicatePhoto.resources.lambda);
 const duplicatePhotoResource = restApi.root.addResource("duplicate-photo");
 duplicatePhotoResource.addMethod("POST", duplicatePhotoIntegration, {
-  authorizationType: AuthorizationType.NONE,
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
 });
 
 backend.addOutput({
