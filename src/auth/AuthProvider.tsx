@@ -1,9 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { fetchAuthSession, getCurrentUser, signOut } from "aws-amplify/auth";
+import { fetchAuthSession, fetchUserAttributes, getCurrentUser, signOut } from "aws-amplify/auth";
 import { Hub } from "aws-amplify/utils";
 
 type AuthUser = {
   username: string;
+  email?: string;
+  givenName?: string;
+  familyName?: string;
+  fullName?: string;
   groups: string[];
   folderId?: string;
 };
@@ -25,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const current = await getCurrentUser();
       const session = await fetchAuthSession({ forceRefresh });
+      const attributes = await fetchUserAttributes();
       const idToken = session.tokens?.idToken;
       const payload = idToken?.payload ?? {};
       const groupsClaim = payload["cognito:groups"];
@@ -40,6 +45,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser({
         username: current.username,
+        email: attributes.email,
+        givenName: attributes.given_name,
+        familyName: attributes.family_name,
+        fullName:
+          [attributes.given_name, attributes.family_name].filter(Boolean).join(" ") ||
+          attributes.name,
         groups,
         folderId,
       });

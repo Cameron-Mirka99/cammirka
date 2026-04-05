@@ -31,7 +31,11 @@ export const Header = () => {
   const isAdmin = Boolean(user?.groups.includes("admin"));
   const isHome = location.pathname === "/";
   const isArchive = location.pathname === "/archive";
-  const isPrivateSurface = location.pathname === "/my-photos" || location.pathname === "/admin" || location.pathname === "/login";
+  const isPrivateSurface =
+    location.pathname === "/my-photos" ||
+    location.pathname === "/admin" ||
+    location.pathname === "/account" ||
+    location.pathname === "/login";
   const scrolled = useScrollTrigger({ disableHysteresis: true, threshold: 36 });
   const overlayMode = isHome && !scrolled;
   const navItems = isPrivateSurface
@@ -152,6 +156,11 @@ export const Header = () => {
                     </MenuItem>
                   ))}
                   {isSignedIn && (
+                    <MenuItem component={Link} to="/account" onClick={closeNavMenu}>
+                      Account
+                    </MenuItem>
+                  )}
+                  {isSignedIn && (
                     <MenuItem component={Link} to="/my-photos" onClick={closeNavMenu}>
                       My Photos
                     </MenuItem>
@@ -256,40 +265,76 @@ export const Header = () => {
                       Private Access
                     </Button>
                   ) : (
-                    <Button
-                      color="inherit"
-                      component={Link}
-                      to="/my-photos"
-                      sx={{
-                        px: 0,
-                        minWidth: "auto",
-                        whiteSpace: "nowrap",
-                        color: location.pathname === "/my-photos" ? theme.palette.primary.main : navColor,
-                        fontSize: "0.82rem",
-                        position: "relative",
-                        ...motionHoverLift,
-                        "&::after": {
-                          content: '""',
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
-                          bottom: -6,
-                          height: 1.5,
-                          backgroundColor: theme.palette.primary.main,
-                          transform: location.pathname === "/my-photos" ? "scaleX(1)" : "scaleX(0)",
-                          transformOrigin: "left center",
-                          transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
-                        },
-                        "&:hover": {
-                          transform: "translateY(-2px)",
-                        },
-                        "&:hover::after": {
-                          transform: "scaleX(1)",
-                        },
-                      }}
-                    >
-                      My Photos
-                    </Button>
+                    <>
+                      <Button
+                        color="inherit"
+                        component={Link}
+                        to="/my-photos"
+                        sx={{
+                          px: 0,
+                          minWidth: "auto",
+                          whiteSpace: "nowrap",
+                          color: location.pathname === "/my-photos" ? theme.palette.primary.main : navColor,
+                          fontSize: "0.82rem",
+                          position: "relative",
+                          ...motionHoverLift,
+                          "&::after": {
+                            content: '""',
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            bottom: -6,
+                            height: 1.5,
+                            backgroundColor: theme.palette.primary.main,
+                            transform: location.pathname === "/my-photos" ? "scaleX(1)" : "scaleX(0)",
+                            transformOrigin: "left center",
+                            transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                          },
+                          "&:hover": {
+                            transform: "translateY(-2px)",
+                          },
+                          "&:hover::after": {
+                            transform: "scaleX(1)",
+                          },
+                        }}
+                      >
+                        My Photos
+                      </Button>
+                      <Button
+                        color="inherit"
+                        component={Link}
+                        to="/account"
+                        sx={{
+                          px: 0,
+                          minWidth: "auto",
+                          whiteSpace: "nowrap",
+                          color: location.pathname === "/account" ? theme.palette.primary.main : navColor,
+                          fontSize: "0.82rem",
+                          position: "relative",
+                          ...motionHoverLift,
+                          "&::after": {
+                            content: '""',
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            bottom: -6,
+                            height: 1.5,
+                            backgroundColor: theme.palette.primary.main,
+                            transform: location.pathname === "/account" ? "scaleX(1)" : "scaleX(0)",
+                            transformOrigin: "left center",
+                            transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1)",
+                          },
+                          "&:hover": {
+                            transform: "translateY(-2px)",
+                          },
+                          "&:hover::after": {
+                            transform: "scaleX(1)",
+                          },
+                        }}
+                      >
+                        Account
+                      </Button>
+                    </>
                   )}
                   {isAdmin && (
                     <Button
@@ -421,14 +466,19 @@ export const Header = () => {
             Sign In
           </MenuItem>
         ) : (
-          <MenuItem
-            onClick={() => {
-              signOut();
-              closeAccountMenu();
-            }}
-          >
-            Sign Out
-          </MenuItem>
+          <>
+            <MenuItem component={Link} to="/account" onClick={closeAccountMenu}>
+              Account
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                signOut();
+                closeAccountMenu();
+              }}
+            >
+              Sign Out
+            </MenuItem>
+          </>
         )}
       </Menu>
     </>

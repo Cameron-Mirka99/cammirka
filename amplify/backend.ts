@@ -35,6 +35,7 @@ import { movePhoto } from "./functions/movePhoto/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { unbanFolderUser } from "./functions/unbanFolderUser/resource.js";
+import { updateUser } from "./functions/updateUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
 const backend = defineBackend({
@@ -56,6 +57,7 @@ const backend = defineBackend({
   publicPhotos,
   removeFolderUser,
   unbanFolderUser,
+  updateUser,
   uploadImageFunction,
 });
 
@@ -216,6 +218,10 @@ backend.listAllUsers.addEnvironment(
   "USER_POOL_ID",
   backend.auth.resources.userPool.userPoolId,
 );
+backend.updateUser.addEnvironment(
+  "USER_POOL_ID",
+  backend.auth.resources.userPool.userPoolId,
+);
 backend.listUserFolders.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
@@ -293,6 +299,13 @@ backend.backfillFolderUsers.resources.lambda.addToRolePolicy(
 backend.listAllUsers.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ["cognito-idp:ListUsers"],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  }),
+);
+
+backend.updateUser.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ["cognito-idp:AdminUpdateUserAttributes"],
     resources: [backend.auth.resources.userPool.userPoolArn],
   }),
 );
@@ -383,6 +396,12 @@ const listAllUsersIntegration = new LambdaIntegration(
 );
 const usersResource = restApi.root.addResource("users");
 usersResource.addMethod("GET", listAllUsersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+const updateUserIntegration = new LambdaIntegration(backend.updateUser.resources.lambda);
+const updateUserResource = usersResource.addResource("update");
+updateUserResource.addMethod("POST", updateUserIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

@@ -54,6 +54,7 @@ export function FolderAccessPanel({
   onUnbanUser,
 }: FolderAccessPanelProps) {
   const formatUserName = (userEntry: FolderUser) => {
+    if (userEntry.fullName) return userEntry.fullName;
     if (userEntry.name) return userEntry.name;
     const combined = [userEntry.givenName, userEntry.familyName].filter(Boolean).join(" ");
     if (combined) return combined;
@@ -108,7 +109,7 @@ export function FolderAccessPanel({
             loading={allUsersLoading}
             onChange={(_, value) => onAssignableUserChange(value)}
             isOptionEqualToValue={(option, value) => option.username === value.username}
-            getOptionLabel={(option) => option.email ?? option.username}
+            getOptionLabel={(option) => formatUserName(option)}
             filterOptions={(options, state) => {
               const query = state.inputValue.trim().toLowerCase();
               if (!query) return options;
@@ -117,6 +118,7 @@ export function FolderAccessPanel({
                   option.email,
                   option.username,
                   option.name,
+                  option.fullName,
                   option.givenName,
                   option.familyName,
                 ]
@@ -136,7 +138,7 @@ export function FolderAccessPanel({
             )}
             renderOption={(props, option) => (
               <li {...props} key={option.username}>
-                {option.email ?? option.username} ({option.username})
+                {formatUserName(option)} {option.email ? `- ${option.email}` : `(${option.username})`}
               </li>
             )}
           />
@@ -209,6 +211,9 @@ export function FolderAccessPanel({
                   {userEntry.enabled === false ? "Disabled" : "Enabled"}
                 </Box>
                 <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                  Folder attribute: {userEntry.folderId ?? "Not set"}
+                </Box>
+                <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
                   Created: {formatDate(userEntry.createdAt)}
                 </Box>
                 <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
@@ -267,6 +272,9 @@ export function FolderAccessPanel({
                     Email: {userEntry.email}
                   </Box>
                 )}
+                <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
+                  Folder attribute: {userEntry.folderId ?? "Not set"}
+                </Box>
                 <Box sx={{ fontSize: "0.75rem", color: mutedText }}>
                   Banned: {formatDate(userEntry.bannedAt)}
                 </Box>

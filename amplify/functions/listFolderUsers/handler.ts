@@ -100,6 +100,7 @@ async function fetchUser(username: string) {
       name: getAttribute(attrs, "name"),
       givenName: getAttribute(attrs, "given_name"),
       familyName: getAttribute(attrs, "family_name"),
+      folderId: getAttribute(attrs, "custom:folderId"),
     };
   } catch (error) {
     console.error(`Failed to fetch user ${username}`, error);

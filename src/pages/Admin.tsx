@@ -12,6 +12,7 @@ import { CreateInviteSection } from "./admin/CreateInviteSection";
 import { FolderAccessPanel } from "./admin/FolderAccessPanel";
 import { FolderItemsSection } from "./admin/FolderItemsSection";
 import { FoldersSidebar } from "./admin/FoldersSidebar";
+import { UserDirectorySection } from "./admin/UserDirectorySection";
 import { UploadPhotoSection } from "./admin/UploadPhotoSection";
 import { UploadErrorToast } from "./admin/UploadErrorToast";
 import { buildUploadRequestBody, exceedsUploadLimit, formatBytes, getUploadLimitBytes } from "./admin/uploadUtils";
@@ -45,6 +46,11 @@ export default function Admin() {
   const [assignFolderId, setAssignFolderId] = useState("");
   const [selectedAssignableUser, setSelectedAssignableUser] = useState<FolderUser | null>(null);
   const [addUserLoading, setAddUserLoading] = useState(false);
+  const [selectedDirectoryUser, setSelectedDirectoryUser] = useState<FolderUser | null>(null);
+  const [directoryGivenName, setDirectoryGivenName] = useState("");
+  const [directoryFamilyName, setDirectoryFamilyName] = useState("");
+  const [saveUserLoading, setSaveUserLoading] = useState(false);
+  const [saveUserMessage, setSaveUserMessage] = useState<string | null>(null);
   const [bannedUsers, setBannedUsers] = useState<FolderUser[]>([]);
   const [bannedLoading, setBannedLoading] = useState(false);
   const [bannedError, setBannedError] = useState<string | null>(null);
@@ -67,6 +73,12 @@ export default function Admin() {
   const showFolderAccessPanel = Boolean(selectedFolder && selectedFolder !== "public");
 
   const getFileName = (key: string) => key.split("/").pop() ?? key;
+  const getDisplayUserName = (entry: FolderUser) =>
+    entry.fullName ||
+    entry.name ||
+    [entry.givenName, entry.familyName].filter(Boolean).join(" ") ||
+    entry.email ||
+    entry.username;
 
   const loadFolders = useCallback(async () => {
     if (!apiBase) return;
@@ -91,7 +103,14 @@ export default function Admin() {
         throw new Error(`Failed to load users: ${res.status}`);
       }
       const payload = await res.json();
-      const users: FolderUser[] = Array.isArray(payload.users) ? payload.users : [];
+      const users: FolderUser[] = Array.isArray(payload.users)
+        ? payload.users.map((entry: FolderUser) => ({
+            ...entry,
+            fullName:
+              [entry.givenName, entry.familyName].filter(Boolean).join(" ") ||
+              entry.name,
+          }))
+        : [];
       setAllUsers(users);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load users.";
@@ -181,8 +200,22 @@ export default function Admin() {
         throw new Error(`Failed to load users: ${res.status}`);
       }
       const payload = await res.json();
-      const users: FolderUser[] = Array.isArray(payload.users) ? payload.users : [];
-      const banned: FolderUser[] = Array.isArray(payload.bannedUsers) ? payload.bannedUsers : [];
+      const users: FolderUser[] = Array.isArray(payload.users)
+        ? payload.users.map((entry: FolderUser) => ({
+            ...entry,
+            fullName:
+              [entry.givenName, entry.familyName].filter(Boolean).join(" ") ||
+              entry.name,
+          }))
+        : [];
+      const banned: FolderUser[] = Array.isArray(payload.bannedUsers)
+        ? payload.bannedUsers.map((entry: FolderUser) => ({
+            ...entry,
+            fullName:
+              [entry.givenName, entry.familyName].filter(Boolean).join(" ") ||
+              entry.name,
+          }))
+        : [];
       setFolderUsers(users);
       setBannedUsers(banned);
     } catch (err) {
@@ -550,6 +583,90 @@ export default function Admin() {
   };
 
   useEffect(() => {
+    setDirectoryGivenName(selectedDirectoryUser?.givenName ?? "");
+    setDirectoryFamilyName(selectedDirectoryUser?.familyName ?? "");
+    setSaveUserMessage(null);
+  }, [selectedDirectoryUser]);
+
+  const applyUpdatedUser = useCallback((updatedUser: FolderUser) => {
+    const normalize = (entry: FolderUser) =>
+      entry.username === updatedUser.username
+        ? {
+            ...entry,
+            ...updatedUser,
+            fullName:
+              [updatedUser.givenName, updatedUser.familyName].filter(Boolean).join(" ") ||
+              updatedUser.name,
+          }
+        : entry;
+
+    setAllUsers((prev) => prev.map(normalize));
+    setFolderUsers((prev) => prev.map(normalize));
+    setBannedUsers((prev) => prev.map(normalize));
+    setSelectedDirectoryUser((prev) =>
+      prev?.username === updatedUser.username
+        ? {
+            ...prev,
+            ...updatedUser,
+            fullName:
+              [updatedUser.givenName, updatedUser.familyName].filter(Boolean).join(" ") ||
+              updatedUser.name,
+          }
+        : prev,
+    );
+  }, []);
+
+  const saveDirectoryUser = async () => {
+    if (!apiBase || !selectedDirectoryUser) {
+      return;
+    }
+
+    const nextGivenName = directoryGivenName.trim();
+    const nextFamilyName = directoryFamilyName.trim();
+
+    setSaveUserMessage(null);
+    if (!nextGivenName || !nextFamilyName) {
+      setSaveUserMessage("First name and last name are required.");
+      return;
+    }
+
+    setSaveUserLoading(true);
+    try {
+      const res = await authFetch(`${apiBase}/users/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: selectedDirectoryUser.username,
+          givenName: nextGivenName,
+          familyName: nextFamilyName,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Failed to update user.");
+      }
+
+      const updatedUser: FolderUser = {
+        ...selectedDirectoryUser,
+        givenName: payload.givenName,
+        familyName: payload.familyName,
+        name: payload.name,
+        fullName: payload.name,
+      };
+      applyUpdatedUser(updatedUser);
+      setSaveUserMessage(`Updated ${getDisplayUserName(updatedUser)}.`);
+      loadAllUsers().catch(() => undefined);
+      if (selectedFolder && selectedFolder !== "public") {
+        loadFolderUsers(selectedFolder).catch(() => undefined);
+      }
+    } catch (err) {
+      setSaveUserMessage(err instanceof Error ? err.message : "Failed to update user.");
+    } finally {
+      setSaveUserLoading(false);
+    }
+  };
+
+  useEffect(() => {
     selectedFolderRef.current = selectedFolder;
   }, [selectedFolder]);
 
@@ -770,6 +887,28 @@ export default function Admin() {
           </MotionReveal>
 
           <MotionReveal delay={140}>
+            <Box sx={{ mb: 3 }}>
+              <UserDirectorySection
+                allUsers={allUsers}
+                allUsersLoading={allUsersLoading}
+                allUsersError={allUsersError}
+                selectedUser={selectedDirectoryUser}
+                givenName={directoryGivenName}
+                familyName={directoryFamilyName}
+                saveLoading={saveUserLoading}
+                saveMessage={saveUserMessage}
+                mutedText={mutedText}
+                subtleBorder={subtleBorder}
+                cardBg={cardBg}
+                onSelectedUserChange={setSelectedDirectoryUser}
+                onGivenNameChange={setDirectoryGivenName}
+                onFamilyNameChange={setDirectoryFamilyName}
+                onSave={saveDirectoryUser}
+              />
+            </Box>
+          </MotionReveal>
+
+          <MotionReveal delay={180}>
             <AdvancedSection
               subtleBorder={subtleBorder}
               cardBg={cardBg}

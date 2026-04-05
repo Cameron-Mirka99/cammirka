@@ -319,7 +319,34 @@ export default function Login() {
               }}
             >
               <ThemeProvider theme={authTheme}>
-                <Authenticator />
+                <Authenticator
+                  signUpAttributes={["given_name", "family_name"]}
+                  formFields={{
+                    signUp: {
+                      email: {
+                        order: 1,
+                      },
+                      given_name: {
+                        order: 2,
+                        label: "First name",
+                        placeholder: "Enter your first name",
+                        isRequired: true,
+                      },
+                      family_name: {
+                        order: 3,
+                        label: "Last name",
+                        placeholder: "Enter your last name",
+                        isRequired: true,
+                      },
+                      password: {
+                        order: 4,
+                      },
+                      confirm_password: {
+                        order: 5,
+                      },
+                    },
+                  }}
+                />
               </ThemeProvider>
             </Box>
           </MotionReveal>

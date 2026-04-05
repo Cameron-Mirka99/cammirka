@@ -9,6 +9,7 @@ import About from "./pages/About";
 import Login from "./pages/Login";
 import MyPhotos from "./pages/MyPhotos";
 import Admin from "./pages/Admin";
+import Account from "./pages/Account";
 import { AuthProvider } from "./auth/AuthProvider";
 import { RequireAuth } from "./auth/RequireAuth";
 import { RequireAdmin } from "./auth/RequireAdmin";
@@ -114,6 +115,14 @@ function App() {
             <Route path="/archive" element={<Archive />} />
             <Route path="/about" element={<About />} />
             <Route path="/login" element={<Login />} />
+            <Route
+              path="/account"
+              element={
+                <RequireAuth>
+                  <Account />
+                </RequireAuth>
+              }
+            />
             <Route
               path="/my-photos"
               element={

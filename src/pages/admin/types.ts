@@ -9,6 +9,8 @@ export type FolderUser = {
   name?: string;
   givenName?: string;
   familyName?: string;
+  fullName?: string;
+  folderId?: string;
   status?: string;
   enabled?: boolean;
   createdAt?: string;

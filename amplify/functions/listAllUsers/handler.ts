@@ -29,6 +29,7 @@ export const handler = async (
       name?: string;
       givenName?: string;
       familyName?: string;
+      folderId?: string;
       status?: string;
       enabled?: boolean;
       createdAt?: string;
@@ -54,6 +55,7 @@ export const handler = async (
           name: getAttribute(attrs, "name"),
           givenName: getAttribute(attrs, "given_name"),
           familyName: getAttribute(attrs, "family_name"),
+          folderId: getAttribute(attrs, "custom:folderId"),
           status: user.UserStatus,
           enabled: user.Enabled,
           createdAt: user.UserCreateDate?.toISOString(),
