@@ -5,14 +5,6 @@ export const auth = defineAuth({
     email: true,
   },
   userAttributes: {
-    givenName: {
-      required: true,
-      mutable: true,
-    },
-    familyName: {
-      required: true,
-      mutable: true,
-    },
     "custom:folderId": {
       dataType: "String",
       mutable: true,
