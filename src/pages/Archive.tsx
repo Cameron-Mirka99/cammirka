@@ -1,4 +1,4 @@
-import { Container, Typography, useTheme } from "@mui/material";
+import { Box, Button, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "../components/Header";
@@ -12,13 +12,15 @@ const PAGE_SIZE = 24;
 export default function Archive() {
   const theme = useTheme();
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
   const photoKeys = useMemo(() => photos.map((photo) => photo.key), [photos]);
 
-  const fetchPhotos = useCallback(async (excludeKeys: string[] = []) => {
+  const fetchPhotos = useCallback(async (excludeKeys: string[] = [], tag?: string | null) => {
     if (!photoApiBaseUrl) {
       throw new Error("REACT_APP_PHOTO_API_URL is not configured");
     }
@@ -26,7 +28,7 @@ export default function Archive() {
     const res = await fetch(`${photoApiBaseUrl}/public-photos`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ excludeKeys, limit: PAGE_SIZE }),
+      body: JSON.stringify({ excludeKeys, limit: PAGE_SIZE, tag: tag ?? undefined }),
     });
 
     if (!res.ok) {
@@ -38,14 +40,44 @@ export default function Archive() {
     return incoming;
   }, []);
 
+  const fetchTags = useCallback(async () => {
+    if (!photoApiBaseUrl) {
+      throw new Error("REACT_APP_PHOTO_API_URL is not configured");
+    }
+
+    const res = await fetch(`${photoApiBaseUrl}/tags`, {
+      method: "GET",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch tags: ${res.status}`);
+    }
+
+    const data = await res.json();
+    const incoming = Array.isArray(data.tags)
+      ? data.tags
+          .map((entry: { label?: string }) => (typeof entry?.label === "string" ? entry.label : ""))
+          .filter(Boolean)
+      : [];
+
+    return incoming;
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
     const loadInitial = async () => {
+      if (mounted) {
+        setLoading(true);
+      }
       try {
-        const incoming = await fetchPhotos([]);
+        const [incoming, tags] = await Promise.all([
+          fetchPhotos([], selectedTag),
+          fetchTags(),
+        ]);
         if (!mounted) return;
         setPhotos(incoming);
+        setAvailableTags(tags);
         setHasMore(incoming.length === PAGE_SIZE);
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -61,12 +93,12 @@ export default function Archive() {
     return () => {
       mounted = false;
     };
-  }, [fetchPhotos]);
+  }, [fetchPhotos, fetchTags, selectedTag]);
 
   const handleLoadMore = useCallback(async () => {
     setLoadingMore(true);
     try {
-      const incoming = await fetchPhotos(photoKeys);
+      const incoming = await fetchPhotos(photoKeys, selectedTag);
       setPhotos((current) => {
         const existing = new Set(current.map((photo) => photo.key));
         const deduped = incoming.filter((photo) => !existing.has(photo.key));
@@ -79,7 +111,7 @@ export default function Archive() {
     } finally {
       setLoadingMore(false);
     }
-  }, [fetchPhotos, photoKeys]);
+  }, [fetchPhotos, photoKeys, selectedTag]);
 
   return (
     <>
@@ -124,6 +156,30 @@ export default function Archive() {
             This page is meant for wandering a bit: birds, wetlands, woods, and the changing conditions that shape how
             each frame comes together.
           </Typography>
+          {selectedTag && (
+            <Typography sx={{ mt: 1.5, color: theme.palette.primary.main, fontSize: "0.9rem", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Filtering by tag: {selectedTag}
+            </Typography>
+          )}
+          <Box sx={{ mt: 3, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button
+              size="small"
+              variant={selectedTag === null ? "contained" : "outlined"}
+              onClick={() => setSelectedTag(null)}
+            >
+              All tags
+            </Button>
+            {availableTags.map((tag) => (
+              <Button
+                key={tag}
+                size="small"
+                variant={selectedTag === tag ? "contained" : "outlined"}
+                onClick={() => setSelectedTag(tag)}
+              >
+                {tag}
+              </Button>
+            ))}
+          </Box>
           </MotionReveal>
         </MotionParallax>
       </Container>

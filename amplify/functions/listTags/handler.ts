@@ -7,8 +7,9 @@ export const handler = async (
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
   try {
+    const isPublicRead = event.httpMethod === "GET";
     const claims = getClaims(event);
-    if (!isAdmin(claims)) {
+    if (!isPublicRead && !isAdmin(claims)) {
       return response(403, { message: "Admin access required." });
     }
 

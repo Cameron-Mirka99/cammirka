@@ -584,8 +584,7 @@ duplicatePhotoResource.addMethod("POST", duplicatePhotoIntegration, {
 const listTagsIntegration = new LambdaIntegration(backend.listTags.resources.lambda);
 const tagsResource = restApi.root.addResource("tags");
 tagsResource.addMethod("GET", listTagsIntegration, {
-  authorizationType: AuthorizationType.COGNITO,
-  authorizer,
+  authorizationType: AuthorizationType.NONE,
 });
 tagsResource.addMethod("POST", listTagsIntegration, {
   authorizationType: AuthorizationType.COGNITO,
