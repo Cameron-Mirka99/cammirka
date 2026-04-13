@@ -1,15 +1,18 @@
-import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getManagedPhotoKeysFromStorageKey } from "../shared/photoPaths.js";
-import { deletePhotoTags } from "../shared/tagMetadata.js";
+import { syncPhotoTags } from "../shared/tagMetadata.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
 const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
 type RequestBody = {
+  photoKey?: string;
   key?: string;
+  tags?: string[];
 };
 
 export const handler = async (
@@ -26,45 +29,40 @@ export const handler = async (
     }
 
     const body = parseBody(event);
-    const key = body?.key?.trim();
+    const requestedKey = body?.photoKey?.trim() || body?.key?.trim();
+    const tags = Array.isArray(body?.tags)
+      ? body!.tags.filter((tag): tag is string => typeof tag === "string")
+      : [];
 
-    if (!key) {
-      return response(400, { message: "key is required." });
+    if (!requestedKey) {
+      return response(400, { message: "photoKey is required." });
     }
 
-    const photo = getManagedPhotoKeysFromStorageKey(key);
-    if (!photo) {
-      return response(400, { message: "Invalid key." });
+    const photo = getManagedPhotoKeysFromStorageKey(requestedKey);
+    const photoKey = photo?.canonicalKey ?? requestedKey;
+    const storageKey = photo?.fullKey ?? photo?.legacyKey ?? requestedKey;
+
+    const exists = await photoExists(storageKey);
+    if (!exists) {
+      return response(404, { message: "Photo not found." });
     }
 
-    if (photo.isLegacy) {
-      await deleteObject(photo.legacyKey);
-      await deletePhotoTags({
-        photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
-        tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
-        photoKey: photo.canonicalKey,
-      });
-      return response(200, { deletedKey: photo.legacyKey, deletedKeys: [photo.legacyKey] });
-    }
-
-    await Promise.all([
-      deleteObject(photo.fullKey),
-      deleteOptionalObject(photo.thumbnailKey),
-    ]);
-    await deletePhotoTags({
+    const normalizedTags = await syncPhotoTags({
       photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+      tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
       tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
-      photoKey: photo.canonicalKey,
+      photoKey,
+      tags,
     });
 
     return response(200, {
-      deletedKey: photo.fullKey,
-      deletedKeys: [photo.fullKey, photo.thumbnailKey],
+      photoKey,
+      tags: normalizedTags,
     });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to delete photo.", error: message });
+    return response(500, { message: "Failed to update photo tags.", error: message });
   }
 };
 
@@ -74,6 +72,20 @@ function parseBody(event: APIGatewayProxyEvent) {
     return typeof event.body === "string" ? JSON.parse(event.body) : event.body;
   } catch {
     return null;
+  }
+}
+
+async function photoExists(key: string) {
+  try {
+    await s3.send(
+      new HeadObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+      }),
+    );
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -90,8 +102,7 @@ function getClaims(event: APIGatewayProxyEvent) {
 
 function isAdmin(claims?: Record<string, string>) {
   const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
+  return Boolean(groups && groups.includes("admin"));
 }
 
 function response(statusCode: number, body: Record<string, unknown>) {
@@ -105,28 +116,4 @@ function response(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
-}
-
-async function deleteObject(key: string) {
-  await s3.send(
-    new DeleteObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: key,
-    }),
-  );
-}
-
-async function deleteOptionalObject(key: string) {
-  try {
-    await deleteObject(key);
-  } catch (error) {
-    if (isMissingKeyError(error)) return;
-    throw error;
-  }
-}
-
-function isMissingKeyError(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { name?: string; Code?: string };
-  return candidate.name === "NoSuchKey" || candidate.Code === "NoSuchKey";
 }

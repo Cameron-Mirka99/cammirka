@@ -1,4 +1,5 @@
 import { Box, Button, TextField, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 type CreateFolderSectionProps = {
   folderId: string;
@@ -18,20 +19,30 @@ export function CreateFolderSection({
   onCreateFolder,
 }: CreateFolderSectionProps) {
   return (
-    <Box sx={{ mb: 4 }}>
-      <Typography variant="h6" sx={{ mb: 1 }}>
-        Create Folder
+    <Box
+      sx={{
+        border: (theme) => `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+        borderRadius: 4,
+        p: 2.5,
+        backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.62),
+      }}
+    >
+      <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+        Structure
       </Typography>
-      <Typography sx={{ mb: 2, color: mutedText }}>
-        Example: folder ID <strong>client-jones</strong>, display name{" "}
-        <strong>Jones Family</strong>
+      <Typography variant="h6" sx={{ mb: 0.75 }}>
+        Create a new folder
       </Typography>
-      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+      <Typography sx={{ mb: 2.5, color: mutedText }}>
+        Create the storage container first, then use the selected-folder tools to upload files, assign access, and generate invites.
+      </Typography>
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr)) auto" }, gap: 1.5 }}>
         <TextField
           label="Folder ID"
           value={folderId}
           onChange={(event) => setFolderId(event.target.value)}
-          sx={{ minWidth: 240 }}
+          helperText="Stable internal id, for example client-jones."
           InputLabelProps={{ sx: { color: "text.secondary" } }}
           InputProps={{ sx: { color: "text.primary" } }}
         />
@@ -39,13 +50,15 @@ export function CreateFolderSection({
           label="Display name"
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
-          sx={{ minWidth: 240 }}
+          helperText="Readable label shown in the admin."
           InputLabelProps={{ sx: { color: "text.secondary" } }}
           InputProps={{ sx: { color: "text.primary" } }}
         />
-        <Button variant="contained" onClick={onCreateFolder}>
-          Create
-        </Button>
+        <Box sx={{ display: "flex", alignItems: { md: "flex-start" } }}>
+          <Button variant="contained" onClick={onCreateFolder} fullWidth>
+            Create folder
+          </Button>
+        </Box>
       </Box>
     </Box>
   );

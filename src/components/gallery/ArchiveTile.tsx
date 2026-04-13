@@ -116,10 +116,6 @@ export const ArchiveTile = React.memo(function ArchiveTile({
             },
           }}
         >
-          <Typography sx={{ fontSize: "0.72rem", letterSpacing: "0.16em", textTransform: "uppercase" }}>
-            Open frame
-          </Typography>
-          <EastIcon className="archive-icon" sx={{ fontSize: "1rem", transform: "translateX(0)", transition: "transform 260ms ease" }} />
         </Box>
       </Box>
     </MotionReveal>

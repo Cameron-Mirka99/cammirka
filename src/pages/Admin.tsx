@@ -1,11 +1,12 @@
-import { Box, Container, Typography, useTheme } from "@mui/material";
+import { Box, Button, Container, Tab, Tabs, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { Header } from "../components/Header";
 import { Photo } from "../types/photo";
 import { photoApiBaseUrl } from "../utils/apiConfig";
 import { authFetch } from "../utils/authFetch";
+import { MotionReveal } from "../utils/motion";
 import { AdvancedSection } from "./admin/AdvancedSection";
 import { CreateFolderSection } from "./admin/CreateFolderSection";
 import { CreateInviteSection } from "./admin/CreateInviteSection";
@@ -15,9 +16,9 @@ import { FoldersSidebar } from "./admin/FoldersSidebar";
 import { UserDirectorySection } from "./admin/UserDirectorySection";
 import { UploadPhotoSection } from "./admin/UploadPhotoSection";
 import { UploadErrorToast } from "./admin/UploadErrorToast";
+import { buildTagKey, normalizeTags } from "./admin/tagUtils";
 import { buildSingleUploadRequestBody, exceedsUploadLimit, formatBytes, getUploadLimitBytes } from "./admin/uploadUtils";
 import { FolderSummary, FolderUser } from "./admin/types";
-import { MotionReveal } from "../utils/motion";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -28,6 +29,7 @@ export default function Admin() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [uploadFolderId, setUploadFolderId] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadTags, setUploadTags] = useState<string[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadErrorToast, setUploadErrorToast] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -59,8 +61,16 @@ export default function Admin() {
   const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
   const [userActionKey, setUserActionKey] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderSummary[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [tagActionKey, setTagActionKey] = useState<string | null>(null);
+  const [operationsTab, setOperationsTab] = useState<"upload" | "invite" | "folder">("upload");
+  const [globalTab, setGlobalTab] = useState<"directory" | "advanced">("directory");
   const folderItemsRequestSeq = useRef(0);
   const selectedFolderRef = useRef<string | null>(null);
+  const uploadSectionRef = useRef<HTMLDivElement | null>(null);
+  const inviteSectionRef = useRef<HTMLDivElement | null>(null);
+  const accessSectionRef = useRef<HTMLDivElement | null>(null);
+  const directorySectionRef = useRef<HTMLDivElement | null>(null);
   const itemsPerPage = 10;
 
   const theme = useTheme();
@@ -72,6 +82,8 @@ export default function Admin() {
 
   const apiBase = photoApiBaseUrl;
   const showFolderAccessPanel = Boolean(selectedFolder && selectedFolder !== "public");
+  const selectedFolderSummary = folders.find((folder) => folder.folderId === selectedFolder) ?? null;
+  const selectedFolderLabel = selectedFolderSummary?.displayName ?? selectedFolder ?? "No folder selected";
 
   const getFileName = (key: string) => key.split("/").pop() ?? key;
   const getDisplayUserName = (entry: FolderUser) =>
@@ -80,6 +92,18 @@ export default function Admin() {
     [entry.givenName, entry.familyName].filter(Boolean).join(" ") ||
     entry.email ||
     entry.username;
+
+  const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleOperationsTabChange = (_event: SyntheticEvent, value: "upload" | "invite" | "folder") => {
+    setOperationsTab(value);
+  };
+
+  const handleGlobalTabChange = (_event: SyntheticEvent, value: "directory" | "advanced") => {
+    setGlobalTab(value);
+  };
 
   const loadFolders = useCallback(async () => {
     if (!apiBase) return;
@@ -121,10 +145,46 @@ export default function Admin() {
     }
   }, [apiBase]);
 
+  const loadTags = useCallback(async () => {
+    if (!apiBase) return;
+    try {
+      const res = await authFetch(`${apiBase}/tags`, { method: "GET" });
+      if (!res.ok) {
+        throw new Error(`Failed to load tags: ${res.status}`);
+      }
+      const payload = await res.json();
+      const tags = Array.isArray(payload.tags)
+        ? payload.tags
+            .map((entry: { label?: string }) => (typeof entry?.label === "string" ? entry.label : ""))
+            .filter(Boolean)
+        : [];
+      setAvailableTags(normalizeTags(tags));
+    } catch (err) {
+      console.error(err);
+    }
+  }, [apiBase]);
+
+  const confirmNewTags = useCallback((tags: string[]) => {
+    const normalized = normalizeTags(tags);
+    const knownTagKeys = new Set(availableTags.map(buildTagKey));
+    const newTags = normalized.filter((tag) => !knownTagKeys.has(buildTagKey(tag)));
+
+    if (newTags.length === 0) {
+      return normalized;
+    }
+
+    const confirmed = window.confirm(
+      `Create ${newTags.length === 1 ? "new tag" : "new tags"}: ${newTags.join(", ")}?`,
+    );
+
+    return confirmed ? normalized : null;
+  }, [availableTags]);
+
   useEffect(() => {
     loadFolders().catch(() => undefined);
     loadAllUsers().catch(() => undefined);
-  }, [loadAllUsers, loadFolders]);
+    loadTags().catch(() => undefined);
+  }, [loadAllUsers, loadFolders, loadTags]);
 
   useEffect(() => {
     if (!selectedFolder) {
@@ -305,16 +365,22 @@ export default function Admin() {
       return;
     }
 
+    const confirmedTags = confirmNewTags(uploadTags);
+    if (confirmedTags === null) {
+      setStatusMessage("Upload cancelled.");
+      return;
+    }
+
     setUploadLoading(true);
     try {
       const totalFiles = uploadFiles.length;
       const uploadedFiles: string[] = [];
       const failedFiles: string[] = [];
 
-      for (const [index, file] of uploadFiles.entries()) {
-        setStatusMessage(`Uploading ${index + 1} of ${totalFiles}: ${file.name}`);
+        for (const [index, file] of uploadFiles.entries()) {
+          setStatusMessage(`Uploading ${index + 1} of ${totalFiles}: ${file.name}`);
 
-        const { requestBody, requestBytes } = await buildSingleUploadRequestBody(uploadFolderId, file);
+          const { requestBody, requestBytes } = await buildSingleUploadRequestBody(uploadFolderId, file, confirmedTags);
         if (exceedsUploadLimit(requestBytes)) {
           failedFiles.push(
             `${file.name} (request size ${formatBytes(requestBytes)} exceeds ${formatBytes(getUploadLimitBytes())})`,
@@ -345,6 +411,9 @@ export default function Admin() {
 
       if (uploadedFiles.length > 0) {
         setUploadFiles([]);
+        setUploadTags([]);
+        setAvailableTags((prev) => normalizeTags([...prev, ...confirmedTags]));
+        loadTags().catch(() => undefined);
       }
 
       if (uploadedFiles.length > 0 && selectedFolder && uploadFolderId && selectedFolder === uploadFolderId) {
@@ -614,6 +683,55 @@ export default function Admin() {
     }
   };
 
+  const savePhotoTags = async (photoKey: string, tags: string[]) => {
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+
+    const confirmedTags = confirmNewTags(tags);
+    if (confirmedTags === null) {
+      setStatusMessage("Tag update cancelled.");
+      return;
+    }
+
+    setStatusMessage(null);
+    setTagActionKey(photoKey);
+    try {
+      const res = await authFetch(`${apiBase}/photo-tags`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoKey, tags: confirmedTags }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Failed to update tags.");
+      }
+
+      setFolderItems((prev) =>
+        prev.map((item) =>
+          item.key === photoKey
+            ? {
+                ...item,
+                tags: Array.isArray(payload.tags) ? payload.tags : confirmedTags,
+              }
+            : item,
+        ),
+      );
+      setAvailableTags((prev) => normalizeTags([...prev, ...confirmedTags]));
+      setStatusMessage(
+        confirmedTags.length > 0
+          ? `Saved tags for ${getFileName(photoKey)}.`
+          : `Removed all tags from ${getFileName(photoKey)}.`,
+      );
+      loadTags().catch(() => undefined);
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Failed to update tags.");
+    } finally {
+      setTagActionKey(null);
+    }
+  };
+
   useEffect(() => {
     setDirectoryGivenName(selectedDirectoryUser?.givenName ?? "");
     setDirectoryFamilyName(selectedDirectoryUser?.familyName ?? "");
@@ -728,60 +846,76 @@ export default function Admin() {
       <Header />
       <UploadErrorToast message={uploadErrorToast} onClose={() => setUploadErrorToast(null)} />
       {isAdmin ? (
-        <Container maxWidth={false} sx={{ color: "text.primary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}>
+        <Container
+          maxWidth={false}
+          sx={{ color: "text.primary", px: { xs: 2, sm: 3, md: 5, lg: 7 }, py: { xs: 3, md: 5 } }}
+        >
           <MotionReveal
             sx={{
               mb: 4,
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", lg: "1fr auto" },
-              gap: 2,
-              alignItems: "end",
-              borderBottom: `1px solid ${subtleBorder}`,
-              pb: { xs: 2.5, md: 3 },
+              border: `1px solid ${subtleBorder}`,
+              borderRadius: 6,
+              overflow: "hidden",
+              background:
+                "linear-gradient(135deg, rgba(184, 138, 42, 0.16), rgba(184, 138, 42, 0.04) 34%, rgba(127, 138, 120, 0.14) 100%)",
             }}
           >
-            <Box sx={{ maxWidth: 720 }}>
-              <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
-                Admin Workspace
-              </Typography>
-              <Typography variant="h4" sx={{ mb: 1, fontSize: { xs: "2rem", md: "2.8rem" } }}>
-                Manage folders, invites, and access
-              </Typography>
-              <Typography sx={{ color: mutedText }}>
-                Operate the private gallery system from one place: folder structure, uploads, access control, and invite distribution.
-              </Typography>
-            </Box>
-
             <Box
               sx={{
+                px: { xs: 2.5, md: 4 },
+                py: { xs: 3, md: 4 },
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(88px, 120px))",
-                gap: 1.5,
+                gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) auto" },
+                gap: 3,
+                alignItems: "end",
               }}
             >
-              <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3, px: 1.5, py: 1.25, backgroundColor: cardBg }}>
-                <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: mutedText }}>
-                  Folders
+              <Box sx={{ maxWidth: 760 }}>
+                <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+                  Admin Workspace
                 </Typography>
-                <Typography variant="h6" sx={{ fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
-                  {folders.length}
+                <Typography variant="h3" sx={{ mb: 1.25, fontSize: { xs: "2.3rem", md: "3.35rem" } }}>
+                  Run folders, uploads, sharing, and access from one clear surface
                 </Typography>
-              </Box>
-              <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3, px: 1.5, py: 1.25, backgroundColor: cardBg }}>
-                <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: mutedText }}>
-                  Users
-                </Typography>
-                <Typography variant="h6" sx={{ fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
-                  {allUsers.length}
+                <Typography sx={{ color: mutedText, maxWidth: 700 }}>
+                  The page now centers the selected folder first, keeps media rows visually stable while thumbnails load, and separates day-to-day operations from global maintenance.
                 </Typography>
               </Box>
-              <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3, px: 1.5, py: 1.25, backgroundColor: cardBg }}>
-                <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.12em", color: mutedText }}>
-                  Active
-                </Typography>
-                <Typography variant="h6" sx={{ fontFamily: "'Manrope', 'Segoe UI', sans-serif" }}>
-                  {selectedFolder ?? "None"}
-                </Typography>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(110px, 1fr))" },
+                  gap: 1.25,
+                  minWidth: { lg: 480 },
+                }}
+              >
+                <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3.5, px: 1.5, py: 1.4, backgroundColor: cardBg }}>
+                  <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                    Folders
+                  </Typography>
+                  <Typography variant="h6">{folders.length}</Typography>
+                </Box>
+                <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3.5, px: 1.5, py: 1.4, backgroundColor: cardBg }}>
+                  <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                    Users
+                  </Typography>
+                  <Typography variant="h6">{allUsers.length}</Typography>
+                </Box>
+                <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3.5, px: 1.5, py: 1.4, backgroundColor: cardBg }}>
+                  <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                    Active items
+                  </Typography>
+                  <Typography variant="h6">{selectedFolder ? folderItems.length : 0}</Typography>
+                </Box>
+                <Box sx={{ border: `1px solid ${subtleBorder}`, borderRadius: 3.5, px: 1.5, py: 1.4, backgroundColor: cardBg }}>
+                  <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                    Selected
+                  </Typography>
+                  <Typography variant="h6" sx={{ overflowWrap: "anywhere" }}>
+                    {selectedFolder ?? "None"}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
           </MotionReveal>
@@ -804,152 +938,349 @@ export default function Admin() {
 
           <MotionReveal delay={80}>
             <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "320px minmax(0, 1fr)" },
-              gap: { xs: 3, md: 4 },
-            }}
-          >
-            <FoldersSidebar
-              folders={folders}
-              selectedFolder={selectedFolder}
-              folderIdInput={folderId}
-              mutedText={mutedText}
-              subtleBorder={subtleBorder}
-              cardBg={cardBg}
-              itemBg={itemBg}
-              onSelectFolder={(folderIdToSelect) => {
-                setSelectedFolder(folderIdToSelect);
-                setInviteFolderId(folderIdToSelect);
-                setUploadFolderId(folderIdToSelect);
-                setAssignFolderId(folderIdToSelect);
-              }}
-              onDeleteFolder={deleteFolder}
-              onSeedFolderId={setFolderId}
-            />
-
-            <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  xl: showFolderAccessPanel ? "minmax(0, 1fr) 340px" : "1fr",
-                },
-                gap: 3,
+                gridTemplateColumns: { xs: "1fr", lg: "300px minmax(0, 1fr)" },
+                gap: { xs: 3, lg: 4 },
                 alignItems: "start",
               }}
             >
-              <Box>
-                <FolderItemsSection
-                  selectedFolder={selectedFolder}
-                  folders={folders}
-                  itemsMoveTarget={itemsMoveTarget}
-                  setItemsMoveTarget={setItemsMoveTarget}
-                  itemsLoading={itemsLoading}
-                  itemsError={itemsError}
-                  folderItems={folderItems}
-                  itemsPage={itemsPage}
-                  itemsPerPage={itemsPerPage}
-                  setItemsPage={setItemsPage}
-                  actionKey={actionKey}
-                  mutedText={mutedText}
-                  onRefresh={() => selectedFolder && loadFolderItems(selectedFolder)}
-                  onDuplicate={duplicatePhoto}
-                  onMove={movePhotoFromList}
-                  onDelete={deletePhoto}
-                />
+              <FoldersSidebar
+                folders={folders}
+                selectedFolder={selectedFolder}
+                folderIdInput={folderId}
+                mutedText={mutedText}
+                subtleBorder={subtleBorder}
+                cardBg={cardBg}
+                itemBg={itemBg}
+                onSelectFolder={(folderIdToSelect) => {
+                  setSelectedFolder(folderIdToSelect);
+                  setInviteFolderId(folderIdToSelect);
+                  setUploadFolderId(folderIdToSelect);
+                  setAssignFolderId(folderIdToSelect);
+                }}
+                onDeleteFolder={deleteFolder}
+                onSeedFolderId={setFolderId}
+              />
 
-                <CreateFolderSection
-                  folderId={folderId}
-                  displayName={displayName}
-                  mutedText={mutedText}
-                  setFolderId={setFolderId}
-                  setDisplayName={setDisplayName}
-                  onCreateFolder={createFolder}
-                />
+              <Box sx={{ display: "grid", gap: 3 }}>
+                <Box
+                  sx={{
+                    border: `1px solid ${subtleBorder}`,
+                    borderRadius: 5,
+                    p: { xs: 2.5, md: 3 },
+                    background: cardBg,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) auto" },
+                      gap: 2.5,
+                      alignItems: "end",
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+                        Current Focus
+                      </Typography>
+                      <Typography variant="h4" sx={{ mb: 0.75, fontSize: { xs: "2rem", md: "2.6rem" } }}>
+                        {selectedFolderLabel}
+                      </Typography>
+                      <Typography sx={{ color: mutedText, maxWidth: 760 }}>
+                        {selectedFolder
+                          ? "This command deck keeps the active folder visible while you jump directly to uploads, invite creation, or access control."
+                          : "Pick a folder from the index to activate the full workspace. The selected folder automatically feeds the item manager and folder-specific tools."}
+                      </Typography>
+                    </Box>
 
-                <CreateInviteSection
-                  inviteFolderId={inviteFolderId}
-                  inviteLoading={inviteLoading}
-                  inviteUrl={inviteUrl}
-                  mutedText={mutedText}
-                  setInviteFolderId={setInviteFolderId}
-                  onCreateInvite={() => createInvite()}
-                />
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(120px, 1fr))" },
+                        gap: 1.25,
+                        minWidth: { xl: 420 },
+                      }}
+                    >
+                      <Box sx={{ px: 1.5, py: 1.25, borderRadius: 3, backgroundColor: alpha("#191713", 0.04) }}>
+                        <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                          Items
+                        </Typography>
+                        <Typography sx={{ mt: 0.35, fontWeight: 700 }}>{selectedFolder ? folderItems.length : 0}</Typography>
+                      </Box>
+                      <Box sx={{ px: 1.5, py: 1.25, borderRadius: 3, backgroundColor: alpha("#191713", 0.04) }}>
+                        <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                          Members
+                        </Typography>
+                        <Typography sx={{ mt: 0.35, fontWeight: 700 }}>{showFolderAccessPanel ? folderUsers.length : 0}</Typography>
+                      </Box>
+                      <Box sx={{ px: 1.5, py: 1.25, borderRadius: 3, backgroundColor: alpha("#191713", 0.04) }}>
+                        <Typography sx={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.14em", color: mutedText }}>
+                          Bans
+                        </Typography>
+                        <Typography sx={{ mt: 0.35, fontWeight: 700 }}>{showFolderAccessPanel ? bannedUsers.length : 0}</Typography>
+                      </Box>
+                    </Box>
+                  </Box>
 
-                <UploadPhotoSection
-                  uploadFolderId={uploadFolderId}
-                  uploadFiles={uploadFiles}
-                  uploadLoading={uploadLoading}
-                  mutedText={mutedText}
-                  setUploadFolderId={setUploadFolderId}
-                  setUploadFiles={setUploadFiles}
-                  onUpload={uploadImage}
-                />
+                  <Box sx={{ display: "flex", gap: 1.25, flexWrap: "wrap", mt: 2.5 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => selectedFolder && loadFolderItems(selectedFolder).catch(() => undefined)}
+                      disabled={!selectedFolder || itemsLoading}
+                    >
+                      {itemsLoading ? "Refreshing..." : "Refresh library"}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setOperationsTab("upload");
+                        scrollToSection(uploadSectionRef);
+                      }}
+                    >
+                      Jump to upload
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setOperationsTab("invite");
+                        scrollToSection(inviteSectionRef);
+                      }}
+                    >
+                      Jump to invite
+                    </Button>
+                    {showFolderAccessPanel && (
+                      <Button variant="outlined" onClick={() => scrollToSection(accessSectionRef)}>
+                        Jump to access
+                      </Button>
+                    )}
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setGlobalTab("directory");
+                        scrollToSection(directorySectionRef);
+                      }}
+                    >
+                      User directory
+                    </Button>
+                  </Box>
+                </Box>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "1fr",
+                      xl: showFolderAccessPanel ? "minmax(0, 1fr) 360px" : "1fr",
+                    },
+                    gap: 3,
+                    alignItems: "start",
+                  }}
+                >
+                  <Box sx={{ display: "grid", gap: 3 }}>
+                    <FolderItemsSection
+                      selectedFolder={selectedFolder}
+                      folders={folders}
+                      availableTags={availableTags}
+                      itemsMoveTarget={itemsMoveTarget}
+                      setItemsMoveTarget={setItemsMoveTarget}
+                      itemsLoading={itemsLoading}
+                      itemsError={itemsError}
+                      folderItems={folderItems}
+                      itemsPage={itemsPage}
+                      itemsPerPage={itemsPerPage}
+                      setItemsPage={setItemsPage}
+                      actionKey={actionKey}
+                      tagActionKey={tagActionKey}
+                      mutedText={mutedText}
+                      onRefresh={() => {
+                        if (selectedFolder) {
+                          loadFolderItems(selectedFolder).catch(() => undefined);
+                        }
+                      }}
+                      onDuplicate={duplicatePhoto}
+                      onMove={movePhotoFromList}
+                      onDelete={deletePhoto}
+                      onSaveTags={savePhotoTags}
+                    />
+
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+                        Operations
+                      </Typography>
+                      <Typography variant="h5" sx={{ mb: 0.75 }}>
+                        Execute the next action without losing context
+                      </Typography>
+                      <Typography sx={{ mb: 2.5, color: mutedText, maxWidth: 760 }}>
+                        Folder-specific actions sit together here so the workspace reads as a flow: upload assets, create sharing links, then create new folders when the structure needs to expand.
+                      </Typography>
+
+                      <Tabs
+                        value={operationsTab}
+                        onChange={handleOperationsTabChange}
+                        variant="fullWidth"
+                        sx={{
+                          mb: 2.5,
+                          "& .MuiTab-root": {
+                            fontSize: "0.76rem",
+                            py: 1.1,
+                          },
+                        }}
+                      >
+                        <Tab label="Upload" value="upload" />
+                        <Tab label="Invite" value="invite" />
+                        <Tab label="Create Folder" value="folder" />
+                      </Tabs>
+
+                      {operationsTab === "upload" && (
+                        <Box ref={uploadSectionRef}>
+                          <UploadPhotoSection
+                            uploadFolderId={uploadFolderId}
+                            uploadFiles={uploadFiles}
+                            uploadTags={uploadTags}
+                            availableTags={availableTags}
+                            uploadLoading={uploadLoading}
+                            mutedText={mutedText}
+                            setUploadFolderId={setUploadFolderId}
+                            setUploadFiles={setUploadFiles}
+                            setUploadTags={setUploadTags}
+                            onUpload={uploadImage}
+                          />
+                        </Box>
+                      )}
+
+                      {operationsTab === "invite" && (
+                        <Box ref={inviteSectionRef}>
+                          <CreateInviteSection
+                            inviteFolderId={inviteFolderId}
+                            inviteLoading={inviteLoading}
+                            inviteUrl={inviteUrl}
+                            mutedText={mutedText}
+                            setInviteFolderId={setInviteFolderId}
+                            onCreateInvite={() => createInvite()}
+                          />
+                        </Box>
+                      )}
+
+                      {operationsTab === "folder" && (
+                        <Box>
+                          <CreateFolderSection
+                            folderId={folderId}
+                            displayName={displayName}
+                            mutedText={mutedText}
+                            setFolderId={setFolderId}
+                            setDisplayName={setDisplayName}
+                            onCreateFolder={createFolder}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+
+                  {showFolderAccessPanel && selectedFolder && (
+                    <Box ref={accessSectionRef}>
+                      <FolderAccessPanel
+                        selectedFolder={selectedFolder}
+                        folderUsers={folderUsers}
+                        bannedUsers={bannedUsers}
+                        usersLoading={usersLoading}
+                        usersError={usersError}
+                        allUsers={allUsers}
+                        allUsersLoading={allUsersLoading}
+                        allUsersError={allUsersError}
+                        folders={folders}
+                        assignFolderId={assignFolderId}
+                        selectedAssignableUser={selectedAssignableUser}
+                        bannedLoading={bannedLoading}
+                        bannedError={bannedError}
+                        userActionKey={userActionKey}
+                        addUserLoading={addUserLoading}
+                        mutedText={mutedText}
+                        subtleBorder={subtleBorder}
+                        cardBg={cardBg}
+                        onAssignFolderChange={setAssignFolderId}
+                        onAssignableUserChange={setSelectedAssignableUser}
+                        onAddUserToFolder={addUserToFolder}
+                        onRemoveUser={removeFolderUser}
+                        onUnbanUser={unbanFolderUser}
+                      />
+                    </Box>
+                  )}
+                </Box>
               </Box>
-
-              {showFolderAccessPanel && selectedFolder && (
-                <FolderAccessPanel
-                  selectedFolder={selectedFolder}
-                  folderUsers={folderUsers}
-                  bannedUsers={bannedUsers}
-                  usersLoading={usersLoading}
-                  usersError={usersError}
-                  allUsers={allUsers}
-                  allUsersLoading={allUsersLoading}
-                  allUsersError={allUsersError}
-                  folders={folders}
-                  assignFolderId={assignFolderId}
-                  selectedAssignableUser={selectedAssignableUser}
-                  bannedLoading={bannedLoading}
-                  bannedError={bannedError}
-                  userActionKey={userActionKey}
-                  addUserLoading={addUserLoading}
-                  mutedText={mutedText}
-                  subtleBorder={subtleBorder}
-                  cardBg={cardBg}
-                  onAssignFolderChange={setAssignFolderId}
-                  onAssignableUserChange={setSelectedAssignableUser}
-                  onAddUserToFolder={addUserToFolder}
-                  onRemoveUser={removeFolderUser}
-                  onUnbanUser={unbanFolderUser}
-                />
-              )}
-            </Box>
             </Box>
           </MotionReveal>
 
           <MotionReveal delay={140}>
-            <Box sx={{ mb: 3 }}>
-              <UserDirectorySection
-                allUsers={allUsers}
-                allUsersLoading={allUsersLoading}
-                allUsersError={allUsersError}
-                selectedUser={selectedDirectoryUser}
-                givenName={directoryGivenName}
-                familyName={directoryFamilyName}
-                saveLoading={saveUserLoading}
-                saveMessage={saveUserMessage}
-                mutedText={mutedText}
-                subtleBorder={subtleBorder}
-                cardBg={cardBg}
-                onSelectedUserChange={setSelectedDirectoryUser}
-                onGivenNameChange={setDirectoryGivenName}
-                onFamilyNameChange={setDirectoryFamilyName}
-                onSave={saveDirectoryUser}
-              />
-            </Box>
-          </MotionReveal>
+            <Box sx={{ mt: 3 }}>
+              <Box
+                sx={{
+                  border: `1px solid ${subtleBorder}`,
+                  borderRadius: 5,
+                  p: { xs: 2.5, md: 3 },
+                  background: cardBg,
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 1 }}>
+                  Global Admin
+                </Typography>
+                <Typography variant="h5" sx={{ mb: 0.75 }}>
+                  Work across the full system
+                </Typography>
+                <Typography sx={{ mb: 2.5, color: mutedText, maxWidth: 760 }}>
+                  These tools are not tied to the active folder. Use the directory for account detail updates and advanced for maintenance tasks.
+                </Typography>
 
-          <MotionReveal delay={180}>
-            <AdvancedSection
-              subtleBorder={subtleBorder}
-              cardBg={cardBg}
-              mutedText={mutedText}
-              backfillLoading={backfillLoading}
-              backfillMessage={backfillMessage}
-              onBackfill={backfillFolderUsers}
-            />
+                <Tabs
+                  value={globalTab}
+                  onChange={handleGlobalTabChange}
+                  variant="fullWidth"
+                  sx={{
+                    mb: 2.5,
+                    "& .MuiTab-root": {
+                      fontSize: "0.76rem",
+                      py: 1.1,
+                    },
+                  }}
+                >
+                  <Tab label="User Directory" value="directory" />
+                  <Tab label="Advanced" value="advanced" />
+                </Tabs>
+
+                {globalTab === "directory" && (
+                  <Box ref={directorySectionRef}>
+                    <UserDirectorySection
+                      allUsers={allUsers}
+                      allUsersLoading={allUsersLoading}
+                      allUsersError={allUsersError}
+                      selectedUser={selectedDirectoryUser}
+                      givenName={directoryGivenName}
+                      familyName={directoryFamilyName}
+                      saveLoading={saveUserLoading}
+                      saveMessage={saveUserMessage}
+                      mutedText={mutedText}
+                      subtleBorder={subtleBorder}
+                      cardBg={cardBg}
+                      onSelectedUserChange={setSelectedDirectoryUser}
+                      onGivenNameChange={setDirectoryGivenName}
+                      onFamilyNameChange={setDirectoryFamilyName}
+                      onSave={saveDirectoryUser}
+                    />
+                  </Box>
+                )}
+
+                {globalTab === "advanced" && (
+                  <AdvancedSection
+                    subtleBorder={subtleBorder}
+                    cardBg={cardBg}
+                    mutedText={mutedText}
+                    backfillLoading={backfillLoading}
+                    backfillMessage={backfillMessage}
+                    onBackfill={backfillFolderUsers}
+                  />
+                )}
+              </Box>
+            </Box>
           </MotionReveal>
         </Container>
       ) : (

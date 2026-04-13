@@ -8,18 +8,25 @@ import {
   parsePhotoIdentity,
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
+import {
+  getPhotoTagsMap,
+  listPhotoKeysForTag,
+} from "../shared/tagMetadata.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const BUCKET = process.env.BUCKET_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
+const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 const DEFAULT_LIMIT = Number.parseInt(process.env.DEFAULT_LIMIT ?? "200", 10);
 
 type RequestBody = {
   excludeKeys?: string[];
   limit?: number;
+  tag?: string;
 };
 
 type ListedPhoto = {
@@ -50,6 +57,7 @@ export const handler = async (
     let excludeKeys: string[] = [];
     let limit = DEFAULT_LIMIT;
     let requestedFolderId: string | undefined;
+    let requestedTag: string | undefined;
 
     if (event?.body) {
       try {
@@ -62,6 +70,9 @@ export const handler = async (
         }
         if (typeof body.folderId === "string") {
           requestedFolderId = body.folderId;
+        }
+        if (typeof body.tag === "string") {
+          requestedTag = body.tag;
         }
       } catch {
         // ignore body parse errors
@@ -86,6 +97,9 @@ export const handler = async (
       }
       if (query.folderId) {
         requestedFolderId = query.folderId;
+      }
+      if (query.tag) {
+        requestedTag = query.tag;
       }
     }
 
@@ -158,9 +172,17 @@ export const handler = async (
       continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
     } while (continuationToken);
 
+    const taggedPhotoKeys = requestedTag
+      ? new Set(await listPhotoKeysForTag(TAG_ASSIGNMENTS_TABLE_NAME, requestedTag))
+      : null;
+
     const eligiblePhotos = Array.from(candidates.values()).filter((photo) => {
       const primaryKey = photo.fullKey ?? photo.legacyKey;
       if (!primaryKey) {
+        return false;
+      }
+
+      if (taggedPhotoKeys && !taggedPhotoKeys.has(photo.canonicalKey)) {
         return false;
       }
 
@@ -168,6 +190,10 @@ export const handler = async (
     });
     const selectedPhotos = samplePhotos(eligiblePhotos, limit);
     const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
+    const photoTags = await getPhotoTagsMap(
+      PHOTO_METADATA_TABLE_NAME,
+      selectedPhotos.map((photo) => photo.canonicalKey),
+    );
     const photos = selectedPhotos.map((photo) => {
       const storageKey = photo.fullKey ?? photo.legacyKey;
       const thumbnailKey = photo.thumbnailKey ?? photo.fullKey ?? photo.legacyKey;
@@ -176,6 +202,7 @@ export const handler = async (
         storageKey,
         url: `${baseUrl}/${encodeS3Key(storageKey!)}`,
         thumbnailUrl: `${baseUrl}/${encodeS3Key(thumbnailKey!)}`,
+        tags: photoTags.get(photo.canonicalKey) ?? [],
       };
     });
 
@@ -188,6 +215,7 @@ export const handler = async (
         scanned,
         eligibleCount: eligiblePhotos.length,
         folderId,
+        tag: requestedTag ?? null,
       },
     });
   } catch (err) {

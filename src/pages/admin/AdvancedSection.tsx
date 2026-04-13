@@ -1,4 +1,5 @@
 import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 type AdvancedSectionProps = {
   subtleBorder: string;
@@ -21,34 +22,45 @@ export function AdvancedSection({
     <Accordion
       defaultExpanded={false}
       sx={{
-        mt: 4,
-        mb: 4,
         border: `1px solid ${subtleBorder}`,
-        borderRadius: 2,
+        borderRadius: 5,
         background: cardBg,
+        overflow: "hidden",
         "&:before": { display: "none" },
       }}
     >
       <AccordionSummary
-        sx={{ paddingX: 2, paddingY: 1 }}
-        expandIcon={<span style={{ fontSize: "1.2rem", color: mutedText }}>+</span>}
+        sx={{ px: 2.5, py: 1.25 }}
+        expandIcon={<span style={{ fontSize: "1.1rem", color: mutedText }}>+</span>}
       >
-        <Typography variant="h6">Advanced</Typography>
+        <Box>
+          <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 0.25 }}>
+            Advanced
+          </Typography>
+          <Typography variant="h6">Maintenance tools</Typography>
+        </Box>
       </AccordionSummary>
-      <AccordionDetails sx={{ paddingX: 2, paddingBottom: 2 }}>
-        <Typography sx={{ mb: 2, color: mutedText }}>
-          Backfill folder-user mappings from the current user pool.
-        </Typography>
-        <Button
-          variant="outlined"
-          onClick={onBackfill}
-          disabled={backfillLoading}
+      <AccordionDetails sx={{ px: 2.5, pb: 2.5 }}>
+        <Box
+          sx={{
+            px: 2,
+            py: 1.75,
+            borderRadius: 3,
+            border: `1px solid ${alpha("#B88A2A", 0.18)}`,
+            backgroundColor: alpha("#B88A2A", 0.06),
+          }}
         >
-          {backfillLoading ? "Backfilling..." : "Backfill Folder Users"}
-        </Button>
-        {backfillMessage && (
-          <Box sx={{ mt: 2, color: mutedText }}>{backfillMessage}</Box>
-        )}
+          <Typography sx={{ mb: 1, color: "text.primary", fontWeight: 700 }}>
+            Backfill folder-user mappings
+          </Typography>
+          <Typography sx={{ mb: 2, color: mutedText }}>
+            Rebuild folder access records from the current user pool. Use this when mappings fall out of sync.
+          </Typography>
+          <Button variant="outlined" onClick={onBackfill} disabled={backfillLoading}>
+            {backfillLoading ? "Backfilling..." : "Run backfill"}
+          </Button>
+          {backfillMessage && <Box sx={{ mt: 2, color: mutedText }}>{backfillMessage}</Box>}
+        </Box>
       </AccordionDetails>
     </Accordion>
   );

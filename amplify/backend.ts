@@ -32,10 +32,12 @@ import { listUserFolders } from "./functions/listUserFolders/resource.js";
 import { listAllUsers } from "./functions/listAllUsers/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
 import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
+import { listTags } from "./functions/listTags/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { unbanFolderUser } from "./functions/unbanFolderUser/resource.js";
+import { updatePhotoTags } from "./functions/updatePhotoTags/resource.js";
 import { updateUser } from "./functions/updateUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
@@ -55,10 +57,12 @@ const backend = defineBackend({
   listUserFolders,
   listFolders,
   listFolderUsers,
+  listTags,
   movePhoto,
   publicPhotos,
   removeFolderUser,
   unbanFolderUser,
+  updatePhotoTags,
   updateUser,
   uploadImageFunction,
 });
@@ -86,6 +90,22 @@ const folderUsersTable = new Table(infraStack, "FolderUsersTable", {
 const bannedFolderUsersTable = new Table(infraStack, "BannedFolderUsersTable", {
   partitionKey: { name: "folderId", type: AttributeType.STRING },
   sortKey: { name: "username", type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+});
+
+const photoMetadataTable = new Table(infraStack, "PhotoMetadataTable", {
+  partitionKey: { name: "photoKey", type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+});
+
+const tagCatalogTable = new Table(infraStack, "TagCatalogTable", {
+  partitionKey: { name: "tagKey", type: AttributeType.STRING },
+  billingMode: BillingMode.PAY_PER_REQUEST,
+});
+
+const tagAssignmentsTable = new Table(infraStack, "TagAssignmentsTable", {
+  partitionKey: { name: "tagKey", type: AttributeType.STRING },
+  sortKey: { name: "photoKey", type: AttributeType.STRING },
   billingMode: BillingMode.PAY_PER_REQUEST,
 });
 
@@ -122,6 +142,7 @@ photoBucket.grantRead(backend.publicPhotos.resources.lambda);
 photoBucket.grantReadWrite(backend.deleteFolder.resources.lambda);
 photoBucket.grantReadWrite(backend.deletePhoto.resources.lambda);
 photoBucket.grantReadWrite(backend.duplicatePhoto.resources.lambda);
+photoBucket.grantRead(backend.updatePhotoTags.resources.lambda);
 
 backend.uploadImageFunction.addEnvironment(
   "BUCKET_NAME",
@@ -131,6 +152,18 @@ backend.uploadImageFunction.addEnvironment(
   "FOLDERS_TABLE_NAME",
   foldersTable.tableName,
 );
+backend.uploadImageFunction.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
+backend.uploadImageFunction.addEnvironment(
+  "TAG_CATALOG_TABLE_NAME",
+  tagCatalogTable.tableName,
+);
+backend.uploadImageFunction.addEnvironment(
+  "TAG_ASSIGNMENTS_TABLE_NAME",
+  tagAssignmentsTable.tableName,
+);
 backend.getPhotoList.addEnvironment(
   "BUCKET_NAME",
   photoBucket.bucketName,
@@ -142,6 +175,14 @@ backend.getPhotoList.addEnvironment(
 backend.getPhotoList.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
+);
+backend.getPhotoList.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
+backend.getPhotoList.addEnvironment(
+  "TAG_ASSIGNMENTS_TABLE_NAME",
+  tagAssignmentsTable.tableName,
 );
 backend.getPhotoDownloadUrl.addEnvironment(
   "BUCKET_NAME",
@@ -159,11 +200,32 @@ backend.publicPhotos.addEnvironment(
 backend.publicPhotos.addEnvironment(
   "CLOUDFRONT_DOMAIN",
   distribution.domainName,
+);
+backend.publicPhotos.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
+backend.publicPhotos.addEnvironment(
+  "TAG_ASSIGNMENTS_TABLE_NAME",
+  tagAssignmentsTable.tableName,
 );
 
 backend.movePhoto.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 backend.deletePhoto.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 backend.duplicatePhoto.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
+backend.movePhoto.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
+backend.movePhoto.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.movePhoto.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
+backend.deletePhoto.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
+backend.deletePhoto.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
+backend.duplicatePhoto.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
+backend.duplicatePhoto.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.duplicatePhoto.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
+backend.listTags.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.updatePhotoTags.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
+backend.updatePhotoTags.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
+backend.updatePhotoTags.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.updatePhotoTags.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
 
 backend.createFolder.addEnvironment(
   "FOLDERS_TABLE_NAME",
@@ -267,6 +329,25 @@ foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
 foldersTable.grantReadData(backend.uploadImageFunction.resources.lambda);
 foldersTable.grantReadData(backend.listFolders.resources.lambda);
 foldersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.uploadImageFunction.resources.lambda);
+photoMetadataTable.grantReadData(backend.getPhotoList.resources.lambda);
+photoMetadataTable.grantReadData(backend.publicPhotos.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.movePhoto.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.deletePhoto.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.duplicatePhoto.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.updatePhotoTags.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.uploadImageFunction.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.movePhoto.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.duplicatePhoto.resources.lambda);
+tagCatalogTable.grantReadData(backend.listTags.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.updatePhotoTags.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.uploadImageFunction.resources.lambda);
+tagAssignmentsTable.grantReadData(backend.getPhotoList.resources.lambda);
+tagAssignmentsTable.grantReadData(backend.publicPhotos.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.movePhoto.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.deletePhoto.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.duplicatePhoto.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.updatePhotoTags.resources.lambda);
 invitesTable.grantReadWriteData(backend.createInvite.resources.lambda);
 invitesTable.grantReadData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.acceptInvite.resources.lambda);
@@ -496,6 +577,24 @@ deletePhotoResource.addMethod("POST", deletePhotoIntegration, {
 const duplicatePhotoIntegration = new LambdaIntegration(backend.duplicatePhoto.resources.lambda);
 const duplicatePhotoResource = restApi.root.addResource("duplicate-photo");
 duplicatePhotoResource.addMethod("POST", duplicatePhotoIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const listTagsIntegration = new LambdaIntegration(backend.listTags.resources.lambda);
+const tagsResource = restApi.root.addResource("tags");
+tagsResource.addMethod("GET", listTagsIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+tagsResource.addMethod("POST", listTagsIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const updatePhotoTagsIntegration = new LambdaIntegration(backend.updatePhotoTags.resources.lambda);
+const photoTagsResource = restApi.root.addResource("photo-tags");
+photoTagsResource.addMethod("POST", updatePhotoTagsIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

@@ -12,10 +12,14 @@ import {
   buildThumbnailPhotoKey,
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
+import { syncPhotoTags } from "../shared/tagMetadata.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
+const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
+const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const THUMBNAIL_MAX_WIDTH = Number.parseInt(process.env.THUMBNAIL_MAX_WIDTH ?? "960", 10);
 
@@ -110,6 +114,13 @@ export const handler = async (
         try {
           await s3.send(putFullCommand);
           await s3.send(putThumbnailCommand);
+          await syncPhotoTags({
+            photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+            tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
+            tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
+            photoKey: canonicalKey,
+            tags: upload.tags ?? [],
+          });
         } catch (error) {
           await Promise.allSettled([
             deleteObjectIfPresent(fullKey),
@@ -124,6 +135,7 @@ export const handler = async (
           key: canonicalKey,
           fullKey,
           thumbnailKey,
+          tags: upload.tags ?? [],
         };
       }),
     );
@@ -161,11 +173,13 @@ function normalizeUploads(body: {
   imageName?: string;
   thumbnailImage?: string;
   thumbnailContentType?: string;
+  tags?: string[];
   images?: Array<{
     image?: string;
     imageName?: string;
     thumbnailImage?: string;
     thumbnailContentType?: string;
+    tags?: string[];
   }>;
 }) {
   if (!body) return [];
@@ -181,6 +195,9 @@ function normalizeUploads(body: {
           typeof entry?.thumbnailContentType === "string"
             ? entry.thumbnailContentType
             : "",
+        tags: Array.isArray(entry?.tags)
+          ? entry.tags.filter((tag): tag is string => typeof tag === "string")
+          : [],
       }))
       .filter((entry) => entry.image && entry.imageName);
   }
@@ -196,6 +213,9 @@ function normalizeUploads(body: {
         typeof body.thumbnailContentType === "string"
           ? body.thumbnailContentType
           : "",
+      tags: Array.isArray(body.tags)
+        ? body.tags.filter((tag): tag is string => typeof tag === "string")
+        : [],
     }];
   }
   return [];

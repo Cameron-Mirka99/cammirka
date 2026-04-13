@@ -5,10 +5,16 @@ import {
   isDirectPhotoObjectKey,
   parsePhotoIdentity,
 } from "../shared/photoPaths.js";
+import {
+  getPhotoTagsMap,
+  listPhotoKeysForTag,
+} from "../shared/tagMetadata.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET = process.env.BUCKET_NAME;
 const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;
+const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 const DEFAULT_LIMIT = Number.parseInt(process.env.DEFAULT_LIMIT ?? "200", 10);
 const PUBLIC_PREFIX = "public/";
@@ -33,15 +39,19 @@ export const handler = async (
 
     let excludeKeys: string[] = [];
     let limit = DEFAULT_LIMIT;
+    let requestedTag: string | undefined;
 
     if (event?.body) {
       try {
         const body = (typeof event.body === "string"
           ? JSON.parse(event.body)
-          : event.body) as { excludeKeys?: string[]; limit?: number };
+          : event.body) as { excludeKeys?: string[]; limit?: number; tag?: string };
         if (Array.isArray(body.excludeKeys)) excludeKeys = body.excludeKeys;
         if (Number.isInteger(body.limit) && (body.limit ?? 0) > 0) {
           limit = body.limit!;
+        }
+        if (typeof body.tag === "string") {
+          requestedTag = body.tag;
         }
       } catch {
         // ignore body parse errors
@@ -63,6 +73,9 @@ export const handler = async (
         if (Number.isInteger(parsed) && parsed > 0) {
           limit = parsed;
         }
+      }
+      if (query.tag) {
+        requestedTag = query.tag;
       }
     }
 
@@ -107,9 +120,17 @@ export const handler = async (
       continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
     } while (continuationToken);
 
+    const taggedPhotoKeys = requestedTag
+      ? new Set(await listPhotoKeysForTag(TAG_ASSIGNMENTS_TABLE_NAME, requestedTag))
+      : null;
+
     const eligiblePhotos = Array.from(candidates.values()).filter((photo) => {
       const primaryKey = photo.fullKey ?? photo.legacyKey;
       if (!primaryKey) {
+        return false;
+      }
+
+      if (taggedPhotoKeys && !taggedPhotoKeys.has(photo.canonicalKey)) {
         return false;
       }
 
@@ -117,6 +138,10 @@ export const handler = async (
     });
     const selectedPhotos = samplePhotos(eligiblePhotos, limit);
     const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
+    const photoTags = await getPhotoTagsMap(
+      PHOTO_METADATA_TABLE_NAME,
+      selectedPhotos.map((photo) => photo.canonicalKey),
+    );
     const photos = selectedPhotos.map((photo) => {
       const storageKey = photo.fullKey ?? photo.legacyKey;
       const thumbnailKey = photo.thumbnailKey ?? photo.fullKey ?? photo.legacyKey;
@@ -125,6 +150,7 @@ export const handler = async (
         storageKey,
         url: `${baseUrl}/${encodeS3Key(storageKey!)}`,
         thumbnailUrl: `${baseUrl}/${encodeS3Key(thumbnailKey!)}`,
+        tags: photoTags.get(photo.canonicalKey) ?? [],
       };
     });
 
@@ -137,6 +163,7 @@ export const handler = async (
         scanned,
         eligibleCount: eligiblePhotos.length,
         folderId: "public",
+        tag: requestedTag ?? null,
       },
     });
   } catch (err) {

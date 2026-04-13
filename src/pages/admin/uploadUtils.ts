@@ -1,12 +1,12 @@
 const MAX_UPLOAD_REQUEST_BYTES = 10 * 1024 * 1024;
 
-export async function buildUploadRequestBody(folderId: string, files: File[]) {
-  const images = await Promise.all(files.map((file) => buildUploadPayload(file)));
+export async function buildUploadRequestBody(folderId: string, files: File[], tags: string[] = []) {
+  const images = await Promise.all(files.map((file) => buildUploadPayload(file, tags)));
   return buildUploadRequest(folderId, images);
 }
 
-export async function buildSingleUploadRequestBody(folderId: string, file: File) {
-  const image = await buildUploadPayload(file);
+export async function buildSingleUploadRequestBody(folderId: string, file: File, tags: string[] = []) {
+  const image = await buildUploadPayload(file, tags);
   return buildUploadRequest(folderId, [image]);
 }
 
@@ -51,7 +51,7 @@ function toBase64(file: File) {
   });
 }
 
-async function buildUploadPayload(file: File) {
+async function buildUploadPayload(file: File, tags: string[]) {
   const image = await toBase64(file);
   const thumbnail = await createThumbnailFile(file);
 
@@ -60,6 +60,7 @@ async function buildUploadPayload(file: File) {
     image,
     thumbnailImage: await toBase64(thumbnail),
     thumbnailContentType: thumbnail.type || file.type || "image/jpeg",
+    tags,
   };
 }
 

@@ -9,8 +9,12 @@ import {
   getManagedPhotoKeysFromStorageKey,
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
+import { movePhotoTags } from "../shared/tagMetadata.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
+const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
+const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
 export const handler = async (
@@ -54,10 +58,18 @@ export const handler = async (
     if (sourcePhoto.isLegacy) {
       await copyObject(sourcePhoto.legacyKey, destinationPhoto.legacyKey);
       await deleteObject(sourcePhoto.legacyKey);
+      await movePhotoTags({
+        photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+        tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
+        tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
+        sourcePhotoKey: sourcePhoto.canonicalKey,
+        destinationPhotoKey: destinationPhoto.canonicalKey,
+      });
       return response(200, {
         sourceKey,
         destinationKey: destinationPhoto.legacyKey,
         movedKeys: [destinationPhoto.legacyKey],
+        photoKey: destinationPhoto.canonicalKey,
       });
     }
 
@@ -81,10 +93,19 @@ export const handler = async (
       deleteOptionalObject(sourcePhoto.thumbnailKey),
     ]);
 
+    await movePhotoTags({
+      photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+      tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
+      tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
+      sourcePhotoKey: sourcePhoto.canonicalKey,
+      destinationPhotoKey: destinationPhoto.canonicalKey,
+    });
+
     return response(200, {
       sourceKey,
       destinationKey: destinationPhoto.fullKey,
       movedKeys: [destinationPhoto.fullKey, destinationPhoto.thumbnailKey],
+      photoKey: destinationPhoto.canonicalKey,
     });
   } catch (error) {
     console.error(error);

@@ -9,8 +9,12 @@ import {
   getManagedPhotoKeysFromStorageKey,
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
+import { copyPhotoTags } from "../shared/tagMetadata.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
+const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
+const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
 type RequestBody = {
@@ -61,10 +65,18 @@ export const handler = async (
 
     if (sourcePhoto.isLegacy) {
       await copyObject(sourcePhoto.legacyKey, destinationPhoto.legacyKey);
+      await copyPhotoTags({
+        photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+        tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
+        tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
+        sourcePhotoKey: sourcePhoto.canonicalKey,
+        destinationPhotoKey: destinationPhoto.canonicalKey,
+      });
       return response(200, {
         sourceKey,
         destinationKey: destinationPhoto.legacyKey,
         duplicatedKeys: [destinationPhoto.legacyKey],
+        photoKey: destinationPhoto.canonicalKey,
       });
     }
 
@@ -83,10 +95,19 @@ export const handler = async (
       throw error;
     }
 
+    await copyPhotoTags({
+      photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+      tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
+      tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
+      sourcePhotoKey: sourcePhoto.canonicalKey,
+      destinationPhotoKey: destinationPhoto.canonicalKey,
+    });
+
     return response(200, {
       sourceKey,
       destinationKey: destinationPhoto.fullKey,
       duplicatedKeys: [destinationPhoto.fullKey, destinationPhoto.thumbnailKey],
+      photoKey: destinationPhoto.canonicalKey,
     });
   } catch (error) {
     console.error(error);
