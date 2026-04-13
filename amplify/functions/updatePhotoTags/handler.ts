@@ -66,10 +66,12 @@ export const handler = async (
   }
 };
 
-function parseBody(event: APIGatewayProxyEvent) {
+function parseBody(event: APIGatewayProxyEvent): RequestBody | null {
   if (!event.body) return null;
   try {
-    return typeof event.body === "string" ? JSON.parse(event.body) : event.body;
+    return typeof event.body === "string"
+      ? (JSON.parse(event.body) as RequestBody)
+      : (event.body as RequestBody);
   } catch {
     return null;
   }
