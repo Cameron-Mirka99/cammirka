@@ -40,8 +40,8 @@ function Home() {
       ? (data.tags as TagResponse[])
           .filter((entry: TagResponse) => entry?.showOnHome !== false)
           .sort((a, b) => {
-            const aOrder = typeof a?.sortOrder === "number" ? a.sortOrder : Number.MAX_SAFE_INTEGER;
-            const bOrder = typeof b?.sortOrder === "number" ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+            const aOrder = typeof a?.sortOrder === "number" ? a.sortOrder : 1_000_000;
+            const bOrder = typeof b?.sortOrder === "number" ? b.sortOrder : 1_000_000;
             if (aOrder === bOrder) {
               return (a?.label ?? "").localeCompare(b?.label ?? "", undefined, { sensitivity: "base" });
             }

@@ -171,7 +171,7 @@ export default function Admin() {
                 createdAt: typeof entry?.createdAt === "string" ? entry.createdAt : undefined,
                 updatedAt: typeof entry?.updatedAt === "string" ? entry.updatedAt : undefined,
                 showOnHome: entry?.showOnHome !== false,
-                sortOrder: typeof entry?.sortOrder === "number" ? entry.sortOrder : Number.MAX_SAFE_INTEGER,
+                sortOrder: typeof entry?.sortOrder === "number" ? entry.sortOrder : 1_000_000,
               } satisfies TagCatalogEntry;
             })
             .filter((entry: TagCatalogEntry | null): entry is TagCatalogEntry => Boolean(entry))

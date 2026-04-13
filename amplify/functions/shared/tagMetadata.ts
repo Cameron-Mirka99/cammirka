@@ -10,6 +10,8 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const DEFAULT_UNORDERED_SORT = 1_000_000;
+const MAX_SORT_ORDER = 1_000_000_000;
 
 export type PhotoTagMetadata = {
   photoKey: string;
@@ -33,6 +35,17 @@ export function normalizeTagLabel(value: string) {
 
 export function buildTagKey(value: string) {
   return normalizeTagLabel(value).toLowerCase();
+}
+
+function normalizeSortOrder(value: unknown, fallback = DEFAULT_UNORDERED_SORT) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const nextValue = Math.trunc(value);
+  if (nextValue < 0) return 0;
+  if (nextValue > MAX_SORT_ORDER) return MAX_SORT_ORDER;
+  return nextValue;
 }
 
 export function normalizeTags(values: string[]) {
@@ -121,7 +134,7 @@ export async function listKnownTags(
         createdAt: item.createdAt ?? "",
         updatedAt: item.updatedAt ?? "",
         showOnHome: typeof item.showOnHome === "boolean" ? item.showOnHome : true,
-        sortOrder: typeof item.sortOrder === "number" ? item.sortOrder : Number.MAX_SAFE_INTEGER,
+        sortOrder: normalizeSortOrder(item.sortOrder),
       });
     }
 
@@ -138,7 +151,10 @@ export async function listKnownTags(
 async function getNextTagSortOrder(tableName: string) {
   const tags = await listKnownTags(tableName);
   if (tags.length === 0) return 0;
-  return Math.max(...tags.map((tag) => (typeof tag.sortOrder === "number" ? tag.sortOrder : 0))) + 1;
+  return Math.min(
+    Math.max(...tags.map((tag) => normalizeSortOrder(tag.sortOrder, 0))) + 1,
+    MAX_SORT_ORDER,
+  );
 }
 
 export async function syncPhotoTags(params: {
@@ -229,7 +245,10 @@ export async function syncPhotoTags(params: {
           createdAt: typeof existingTag?.createdAt === "string" ? existingTag.createdAt : now,
           updatedAt: now,
           showOnHome: typeof existingTag?.showOnHome === "boolean" ? existingTag.showOnHome : true,
-          sortOrder: typeof existingTag?.sortOrder === "number" ? existingTag.sortOrder : nextSortOrder++,
+          sortOrder:
+            typeof existingTag?.sortOrder === "number"
+              ? normalizeSortOrder(existingTag.sortOrder)
+              : normalizeSortOrder(nextSortOrder++, 0),
         } satisfies TagRecord,
       }),
     );
@@ -308,7 +327,12 @@ export async function updateTagCatalogEntry(params: {
     createdAt: typeof existingTag?.createdAt === "string" ? existingTag.createdAt : now,
     updatedAt: now,
     showOnHome: typeof showOnHome === "boolean" ? showOnHome : typeof existingTag?.showOnHome === "boolean" ? existingTag.showOnHome : true,
-    sortOrder: typeof sortOrder === "number" ? sortOrder : typeof existingTag?.sortOrder === "number" ? existingTag.sortOrder : await getNextTagSortOrder(tableName),
+    sortOrder:
+      typeof sortOrder === "number"
+        ? normalizeSortOrder(sortOrder, 0)
+        : typeof existingTag?.sortOrder === "number"
+        ? normalizeSortOrder(existingTag.sortOrder)
+        : await getNextTagSortOrder(tableName),
   };
 
   await ddb.send(
