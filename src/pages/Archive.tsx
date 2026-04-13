@@ -1,6 +1,7 @@
 import { Box, Button, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Header } from "../components/Header";
 import { MainImageDisplay } from "../components/MainImageDisplay";
 import { Photo } from "../types/photo";
@@ -11,14 +12,25 @@ const PAGE_SIZE = 24;
 
 export default function Archive() {
   const theme = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const selectedTag = searchParams.get("tag");
 
   const photoKeys = useMemo(() => photos.map((photo) => photo.key), [photos]);
+
+  const applySelectedTag = useCallback((tag: string | null) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (tag) {
+      nextParams.set("tag", tag);
+    } else {
+      nextParams.delete("tag");
+    }
+    setSearchParams(nextParams, { replace: false });
+  }, [searchParams, setSearchParams]);
 
   const fetchPhotos = useCallback(async (excludeKeys: string[] = [], tag?: string | null) => {
     if (!photoApiBaseUrl) {
@@ -165,7 +177,7 @@ export default function Archive() {
             <Button
               size="small"
               variant={selectedTag === null ? "contained" : "outlined"}
-              onClick={() => setSelectedTag(null)}
+              onClick={() => applySelectedTag(null)}
             >
               All tags
             </Button>
@@ -174,7 +186,7 @@ export default function Archive() {
                 key={tag}
                 size="small"
                 variant={selectedTag === tag ? "contained" : "outlined"}
-                onClick={() => setSelectedTag(tag)}
+                onClick={() => applySelectedTag(tag)}
               >
                 {tag}
               </Button>

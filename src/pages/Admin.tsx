@@ -13,12 +13,13 @@ import { CreateInviteSection } from "./admin/CreateInviteSection";
 import { FolderAccessPanel } from "./admin/FolderAccessPanel";
 import { FolderItemsSection } from "./admin/FolderItemsSection";
 import { FoldersSidebar } from "./admin/FoldersSidebar";
+import { HomeTagSettingsSection } from "./admin/HomeTagSettingsSection";
 import { UserDirectorySection } from "./admin/UserDirectorySection";
 import { UploadPhotoSection } from "./admin/UploadPhotoSection";
 import { UploadErrorToast } from "./admin/UploadErrorToast";
 import { buildTagKey, normalizeTags } from "./admin/tagUtils";
 import { buildSingleUploadRequestBody, exceedsUploadLimit, formatBytes, getUploadLimitBytes } from "./admin/uploadUtils";
-import { FolderSummary, FolderUser } from "./admin/types";
+import { FolderSummary, FolderUser, TagCatalogEntry } from "./admin/types";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -62,9 +63,12 @@ export default function Admin() {
   const [userActionKey, setUserActionKey] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderSummary[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [tagCatalog, setTagCatalog] = useState<TagCatalogEntry[]>([]);
+  const [tagCatalogLoading, setTagCatalogLoading] = useState(false);
+  const [tagCatalogError, setTagCatalogError] = useState<string | null>(null);
   const [tagActionKey, setTagActionKey] = useState<string | null>(null);
   const [operationsTab, setOperationsTab] = useState<"upload" | "invite" | "folder">("upload");
-  const [globalTab, setGlobalTab] = useState<"directory" | "advanced">("directory");
+  const [globalTab, setGlobalTab] = useState<"directory" | "home-tags" | "advanced">("directory");
   const folderItemsRequestSeq = useRef(0);
   const selectedFolderRef = useRef<string | null>(null);
   const uploadSectionRef = useRef<HTMLDivElement | null>(null);
@@ -101,7 +105,7 @@ export default function Admin() {
     setOperationsTab(value);
   };
 
-  const handleGlobalTabChange = (_event: SyntheticEvent, value: "directory" | "advanced") => {
+  const handleGlobalTabChange = (_event: SyntheticEvent, value: "directory" | "home-tags" | "advanced") => {
     setGlobalTab(value);
   };
 
@@ -147,20 +151,38 @@ export default function Admin() {
 
   const loadTags = useCallback(async () => {
     if (!apiBase) return;
+    setTagCatalogLoading(true);
+    setTagCatalogError(null);
     try {
       const res = await authFetch(`${apiBase}/tags`, { method: "GET" });
       if (!res.ok) {
         throw new Error(`Failed to load tags: ${res.status}`);
       }
       const payload = await res.json();
-      const tags = Array.isArray(payload.tags)
-        ? payload.tags
-            .map((entry: { label?: string }) => (typeof entry?.label === "string" ? entry.label : ""))
-            .filter(Boolean)
+      const tags: TagCatalogEntry[] = Array.isArray(payload.tags)
+        ? (payload.tags as Partial<TagCatalogEntry>[])
+            .map((entry): TagCatalogEntry | null => {
+              const label = typeof entry?.label === "string" ? entry.label : "";
+              const tagKey = typeof entry?.tagKey === "string" ? entry.tagKey : buildTagKey(label);
+              if (!label || !tagKey) return null;
+              return {
+                tagKey,
+                label,
+                createdAt: typeof entry?.createdAt === "string" ? entry.createdAt : undefined,
+                updatedAt: typeof entry?.updatedAt === "string" ? entry.updatedAt : undefined,
+                showOnHome: entry?.showOnHome !== false,
+                sortOrder: typeof entry?.sortOrder === "number" ? entry.sortOrder : Number.MAX_SAFE_INTEGER,
+              } satisfies TagCatalogEntry;
+            })
+            .filter((entry: TagCatalogEntry | null): entry is TagCatalogEntry => Boolean(entry))
         : [];
-      setAvailableTags(normalizeTags(tags));
+      setTagCatalog(tags);
+      setAvailableTags(normalizeTags(tags.map((entry) => entry.label)));
     } catch (err) {
       console.error(err);
+      setTagCatalogError(err instanceof Error ? err.message : "Failed to load tags.");
+    } finally {
+      setTagCatalogLoading(false);
     }
   }, [apiBase]);
 
@@ -732,6 +754,108 @@ export default function Admin() {
     }
   };
 
+  const updateHomeTagVisibility = async (tag: TagCatalogEntry, showOnHome: boolean) => {
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+
+    setTagCatalogError(null);
+    setTagActionKey(tag.tagKey);
+    try {
+      const res = await authFetch(`${apiBase}/tag-catalog`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tagKey: tag.tagKey,
+          label: tag.label,
+          showOnHome,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Failed to update home visibility.");
+      }
+
+      const nextTag = payload?.tag as Partial<TagCatalogEntry> | undefined;
+      setTagCatalog((prev) =>
+        prev.map((entry) =>
+          entry.tagKey === tag.tagKey
+            ? {
+                ...entry,
+                showOnHome: typeof nextTag?.showOnHome === "boolean" ? nextTag.showOnHome : showOnHome,
+                updatedAt: typeof nextTag?.updatedAt === "string" ? nextTag.updatedAt : entry.updatedAt,
+              }
+            : entry,
+        ),
+      );
+      setStatusMessage(
+        `${tag.label} ${showOnHome ? "will appear" : "will stay hidden"} on the home screen.`,
+      );
+    } catch (err) {
+      setTagCatalogError(err instanceof Error ? err.message : "Failed to update home visibility.");
+    } finally {
+      setTagActionKey(null);
+    }
+  };
+
+  const reorderHomeTags = async (orderedTags: TagCatalogEntry[]) => {
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+
+    const previousTags = tagCatalog
+      .slice()
+      .sort((a, b) =>
+        a.sortOrder === b.sortOrder
+          ? a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+          : a.sortOrder - b.sortOrder,
+      );
+    const changedTags = orderedTags.filter((entry, index) => previousTags[index]?.tagKey !== entry.tagKey);
+    if (changedTags.length === 0) {
+      return;
+    }
+    const reorderedByKey = new Map(orderedTags.map((entry, index) => [entry.tagKey, index]));
+    const movedLabel = changedTags[0]?.label ?? "tag";
+
+    setTagCatalog((prev) => prev.map((entry) => ({
+      ...entry,
+      sortOrder: reorderedByKey.get(entry.tagKey) ?? entry.sortOrder,
+    })));
+
+    setTagCatalogError(null);
+    setTagActionKey(changedTags[0]?.tagKey ?? null);
+    try {
+      const results = await Promise.all(
+        changedTags.map((entry) =>
+          authFetch(`${apiBase}/tag-catalog`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tagKey: entry.tagKey,
+              label: entry.label,
+              sortOrder: reorderedByKey.get(entry.tagKey),
+            }),
+          }),
+        ),
+      );
+      const payloads = await Promise.all(results.map((res) => res.json()));
+      const failedIndex = results.findIndex((res) => !res.ok);
+      if (failedIndex >= 0) {
+        throw new Error(payloads[failedIndex]?.message ?? "Failed to reorder tags.");
+      }
+
+      setStatusMessage(`Updated the home collection order for ${movedLabel}.`);
+      loadTags().catch(() => undefined);
+    } catch (err) {
+      setTagCatalogError(err instanceof Error ? err.message : "Failed to reorder tags.");
+      loadTags().catch(() => undefined);
+    } finally {
+      setTagActionKey(null);
+    }
+  };
+
   useEffect(() => {
     setDirectoryGivenName(selectedDirectoryUser?.givenName ?? "");
     setDirectoryFamilyName(selectedDirectoryUser?.familyName ?? "");
@@ -1228,7 +1352,7 @@ export default function Admin() {
                   Work across the full system
                 </Typography>
                 <Typography sx={{ mb: 2.5, color: mutedText, maxWidth: 760 }}>
-                  These tools are not tied to the active folder. Use the directory for account detail updates and advanced for maintenance tasks.
+                  These tools are not tied to the active folder. Use the directory for account detail updates, home collections to curate the landing page, and advanced for maintenance tasks.
                 </Typography>
 
                 <Tabs
@@ -1244,6 +1368,7 @@ export default function Admin() {
                   }}
                 >
                   <Tab label="User Directory" value="directory" />
+                  <Tab label="Home Collections" value="home-tags" />
                   <Tab label="Advanced" value="advanced" />
                 </Tabs>
 
@@ -1267,6 +1392,20 @@ export default function Admin() {
                       onSave={saveDirectoryUser}
                     />
                   </Box>
+                )}
+
+                {globalTab === "home-tags" && (
+                  <HomeTagSettingsSection
+                    tags={tagCatalog}
+                    loading={tagCatalogLoading}
+                    error={tagCatalogError}
+                    savingTagKey={tagActionKey}
+                    mutedText={mutedText}
+                    subtleBorder={subtleBorder}
+                    cardBg={cardBg}
+                    onToggle={updateHomeTagVisibility}
+                    onReorder={reorderHomeTags}
+                  />
                 )}
 
                 {globalTab === "advanced" && (

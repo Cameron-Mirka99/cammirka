@@ -18,11 +18,13 @@ export type PhotoTagMetadata = {
   updatedAt: string;
 };
 
-type TagRecord = {
+export type TagRecord = {
   tagKey: string;
   label: string;
   createdAt: string;
   updatedAt: string;
+  showOnHome: boolean;
+  sortOrder: number;
 };
 
 export function normalizeTagLabel(value: string) {
@@ -118,13 +120,25 @@ export async function listKnownTags(
         label,
         createdAt: item.createdAt ?? "",
         updatedAt: item.updatedAt ?? "",
+        showOnHome: typeof item.showOnHome === "boolean" ? item.showOnHome : true,
+        sortOrder: typeof item.sortOrder === "number" ? item.sortOrder : Number.MAX_SAFE_INTEGER,
       });
     }
 
     exclusiveStartKey = response.LastEvaluatedKey;
   } while (exclusiveStartKey);
 
-  return tags.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  return tags.sort((a, b) =>
+    a.sortOrder === b.sortOrder
+      ? a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+      : a.sortOrder - b.sortOrder,
+  );
+}
+
+async function getNextTagSortOrder(tableName: string) {
+  const tags = await listKnownTags(tableName);
+  if (tags.length === 0) return 0;
+  return Math.max(...tags.map((tag) => (typeof tag.sortOrder === "number" ? tag.sortOrder : 0))) + 1;
 }
 
 export async function syncPhotoTags(params: {
@@ -148,6 +162,7 @@ export async function syncPhotoTags(params: {
 
   const normalizedTags = normalizeTags(tags);
   const now = new Date().toISOString();
+  let nextSortOrder = -1;
 
   const previous = await ddb.send(
     new GetCommand({
@@ -191,14 +206,30 @@ export async function syncPhotoTags(params: {
   }
 
   for (const tag of normalizedTags) {
+    const existing = await ddb.send(
+      new GetCommand({
+        TableName: tagCatalogTableName,
+        Key: { tagKey: tag.tagKey },
+      }),
+    );
+
+    const existingTag = existing.Item as Partial<TagRecord> | undefined;
+    if (typeof existingTag?.sortOrder !== "number") {
+      if (nextSortOrder < 0) {
+        nextSortOrder = await getNextTagSortOrder(tagCatalogTableName);
+      }
+    }
+
     await ddb.send(
       new PutCommand({
         TableName: tagCatalogTableName,
         Item: {
           tagKey: tag.tagKey,
           label: tag.label,
-          createdAt: now,
+          createdAt: typeof existingTag?.createdAt === "string" ? existingTag.createdAt : now,
           updatedAt: now,
+          showOnHome: typeof existingTag?.showOnHome === "boolean" ? existingTag.showOnHome : true,
+          sortOrder: typeof existingTag?.sortOrder === "number" ? existingTag.sortOrder : nextSortOrder++,
         } satisfies TagRecord,
       }),
     );
@@ -233,6 +264,61 @@ export async function syncPhotoTags(params: {
   }
 
   return normalizedTags.map((tag) => tag.label);
+}
+
+export async function updateTagCatalogEntry(params: {
+  tableName: string | undefined;
+  tagKey?: string;
+  label?: string;
+  showOnHome?: boolean;
+  sortOrder?: number;
+}) {
+  const { tableName, tagKey, label, showOnHome, sortOrder } = params;
+  if (!tableName) {
+    throw new Error("Tag catalog table is not configured.");
+  }
+
+  const normalizedLabel = typeof label === "string" ? normalizeTagLabel(label) : "";
+  const resolvedTagKey = typeof tagKey === "string" && tagKey.trim()
+    ? tagKey.trim().toLowerCase()
+    : buildTagKey(normalizedLabel);
+
+  if (!resolvedTagKey) {
+    throw new Error("tagKey or label is required.");
+  }
+
+  const now = new Date().toISOString();
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: { tagKey: resolvedTagKey },
+    }),
+  );
+
+  const existingTag = existing.Item as Partial<TagRecord> | undefined;
+  const nextLabel = normalizedLabel || (typeof existingTag?.label === "string" ? existingTag.label : "");
+
+  if (!nextLabel) {
+    throw new Error("A label is required to update this tag.");
+  }
+
+  const nextRecord: TagRecord = {
+    tagKey: resolvedTagKey,
+    label: nextLabel,
+    createdAt: typeof existingTag?.createdAt === "string" ? existingTag.createdAt : now,
+    updatedAt: now,
+    showOnHome: typeof showOnHome === "boolean" ? showOnHome : typeof existingTag?.showOnHome === "boolean" ? existingTag.showOnHome : true,
+    sortOrder: typeof sortOrder === "number" ? sortOrder : typeof existingTag?.sortOrder === "number" ? existingTag.sortOrder : await getNextTagSortOrder(tableName),
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: tableName,
+      Item: nextRecord,
+    }),
+  );
+
+  return nextRecord;
 }
 
 export async function copyPhotoTags(params: {

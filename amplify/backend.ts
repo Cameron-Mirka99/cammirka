@@ -38,6 +38,7 @@ import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { unbanFolderUser } from "./functions/unbanFolderUser/resource.js";
 import { updatePhotoTags } from "./functions/updatePhotoTags/resource.js";
+import { updateTagCatalog } from "./functions/updateTagCatalog/resource.js";
 import { updateUser } from "./functions/updateUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
@@ -63,6 +64,7 @@ const backend = defineBackend({
   removeFolderUser,
   unbanFolderUser,
   updatePhotoTags,
+  updateTagCatalog,
   updateUser,
   uploadImageFunction,
 });
@@ -226,6 +228,7 @@ backend.updatePhotoTags.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 backend.updatePhotoTags.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
 backend.updatePhotoTags.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
 backend.updatePhotoTags.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
+backend.updateTagCatalog.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
 
 backend.createFolder.addEnvironment(
   "FOLDERS_TABLE_NAME",
@@ -341,6 +344,7 @@ tagCatalogTable.grantReadWriteData(backend.movePhoto.resources.lambda);
 tagCatalogTable.grantReadWriteData(backend.duplicatePhoto.resources.lambda);
 tagCatalogTable.grantReadData(backend.listTags.resources.lambda);
 tagCatalogTable.grantReadWriteData(backend.updatePhotoTags.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.updateTagCatalog.resources.lambda);
 tagAssignmentsTable.grantReadWriteData(backend.uploadImageFunction.resources.lambda);
 tagAssignmentsTable.grantReadData(backend.getPhotoList.resources.lambda);
 tagAssignmentsTable.grantReadData(backend.publicPhotos.resources.lambda);
@@ -594,6 +598,13 @@ tagsResource.addMethod("POST", listTagsIntegration, {
 const updatePhotoTagsIntegration = new LambdaIntegration(backend.updatePhotoTags.resources.lambda);
 const photoTagsResource = restApi.root.addResource("photo-tags");
 photoTagsResource.addMethod("POST", updatePhotoTagsIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const updateTagCatalogIntegration = new LambdaIntegration(backend.updateTagCatalog.resources.lambda);
+const tagCatalogResource = restApi.root.addResource("tag-catalog");
+tagCatalogResource.addMethod("POST", updateTagCatalogIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

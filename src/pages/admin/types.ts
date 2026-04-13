@@ -17,3 +17,12 @@ export type FolderUser = {
   lastModifiedAt?: string;
   bannedAt?: string;
 };
+
+export type TagCatalogEntry = {
+  tagKey: string;
+  label: string;
+  createdAt?: string;
+  updatedAt?: string;
+  showOnHome: boolean;
+  sortOrder: number;
+};
