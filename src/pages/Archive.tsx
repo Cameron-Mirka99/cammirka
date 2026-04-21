@@ -1,4 +1,5 @@
-import { Box, Button, Container, Typography, useTheme } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Container, Typography, useTheme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -10,14 +11,21 @@ import { MotionParallax, MotionReveal } from "../utils/motion";
 
 const PAGE_SIZE = 24;
 
+type TagResponse = {
+  label?: string;
+  showOnHome?: boolean;
+};
+
 export default function Archive() {
   const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [mainTags, setMainTags] = useState<string[]>([]);
+  const [secondaryTags, setSecondaryTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [secondaryExpanded, setSecondaryExpanded] = useState(false);
   const selectedTag = searchParams.get("tag");
 
   const photoKeys = useMemo(() => photos.map((photo) => photo.key), [photos]);
@@ -66,13 +74,19 @@ export default function Archive() {
     }
 
     const data = await res.json();
-    const incoming = Array.isArray(data.tags)
-      ? data.tags
-          .map((entry: { label?: string }) => (typeof entry?.label === "string" ? entry.label : ""))
-          .filter(Boolean)
-      : [];
+    const incoming = Array.isArray(data.tags) ? (data.tags as TagResponse[]) : [];
+    const alphabetical = incoming
+      .map((entry) => ({
+        label: typeof entry?.label === "string" ? entry.label : "",
+        showOnHome: entry?.showOnHome !== false,
+      }))
+      .filter((entry) => entry.label)
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
-    return incoming;
+    return {
+      mainTags: alphabetical.filter((entry) => entry.showOnHome).map((entry) => entry.label),
+      secondaryTags: alphabetical.filter((entry) => !entry.showOnHome).map((entry) => entry.label),
+    };
   }, []);
 
   useEffect(() => {
@@ -89,7 +103,8 @@ export default function Archive() {
         ]);
         if (!mounted) return;
         setPhotos(incoming);
-        setAvailableTags(tags);
+        setMainTags(tags.mainTags);
+        setSecondaryTags(tags.secondaryTags);
         setHasMore(incoming.length === PAGE_SIZE);
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -124,6 +139,15 @@ export default function Archive() {
       setLoadingMore(false);
     }
   }, [fetchPhotos, photoKeys, selectedTag]);
+
+  const hasSecondaryTags = secondaryTags.length > 0;
+  const selectedTagIsSecondary = selectedTag !== null && secondaryTags.includes(selectedTag);
+
+  useEffect(() => {
+    if (selectedTagIsSecondary) {
+      setSecondaryExpanded(true);
+    }
+  }, [selectedTagIsSecondary]);
 
   return (
     <>
@@ -181,7 +205,7 @@ export default function Archive() {
             >
               All tags
             </Button>
-            {availableTags.map((tag) => (
+            {mainTags.map((tag) => (
               <Button
                 key={tag}
                 size="small"
@@ -192,6 +216,56 @@ export default function Archive() {
               </Button>
             ))}
           </Box>
+          {hasSecondaryTags && (
+            <Accordion
+              disableGutters
+              expanded={secondaryExpanded || selectedTagIsSecondary}
+              onChange={(_event, expanded) => setSecondaryExpanded(expanded)}
+              sx={{
+                mt: 2,
+                background: "transparent",
+                boxShadow: "none",
+                borderTop: `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
+                "&::before": {
+                  display: "none",
+                },
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon sx={{ color: theme.palette.text.secondary }} />}
+                sx={{
+                  px: 0,
+                  minHeight: 52,
+                  "& .MuiAccordionSummary-content": {
+                    my: 1.5,
+                    alignItems: "center",
+                    gap: 1.5,
+                  },
+                }}
+              >
+                <Typography sx={{ fontSize: "0.86rem", letterSpacing: "0.12em", textTransform: "uppercase", color: theme.palette.text.secondary }}>
+                  Explore More Tags
+                </Typography>
+                <Typography sx={{ fontSize: "0.92rem", color: theme.palette.text.disabled }}>
+                  {secondaryTags.length} additional collections
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, pt: 0, pb: 0 }}>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", pb: 1 }}>
+                  {secondaryTags.map((tag) => (
+                    <Button
+                      key={tag}
+                      size="small"
+                      variant={selectedTag === tag ? "contained" : "outlined"}
+                      onClick={() => applySelectedTag(tag)}
+                    >
+                      {tag}
+                    </Button>
+                  ))}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          )}
           </MotionReveal>
         </MotionParallax>
       </Container>
