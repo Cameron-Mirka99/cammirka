@@ -96,6 +96,11 @@ export default function Admin() {
     [entry.givenName, entry.familyName].filter(Boolean).join(" ") ||
     entry.email ||
     entry.username;
+  const buildFullName = useCallback(
+    (entry: Pick<FolderUser, "givenName" | "familyName" | "name">) =>
+      [entry.givenName, entry.familyName].filter(Boolean).join(" ") || entry.name,
+    [],
+  );
 
   const scrollToSection = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -475,19 +480,46 @@ export default function Admin() {
     );
     if (!confirmed) return;
 
-    const res = await authFetch(`${apiBase}/folders`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId: folderIdToDelete }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setStatusMessage(payload?.message ?? "Delete failed.");
-      return;
+    const previousFolders = folders;
+    const previousSelectedFolder = selectedFolder;
+    const previousInviteFolderId = inviteFolderId;
+    const previousUploadFolderId = uploadFolderId;
+    const previousAssignFolderId = assignFolderId;
+    const nextSelectedFolder = previousSelectedFolder === folderIdToDelete ? null : previousSelectedFolder;
+
+    setFolders((prev) => prev.filter((folder) => folder.folderId !== folderIdToDelete));
+    setSelectedFolder(nextSelectedFolder);
+    if (inviteFolderId === folderIdToDelete) {
+      setInviteFolderId(nextSelectedFolder ?? "");
     }
-    setStatusMessage(`Deleted folder ${payload.folderId}`);
-    setSelectedFolder(null);
-    loadFolders().catch(() => undefined);
+    if (uploadFolderId === folderIdToDelete) {
+      setUploadFolderId(nextSelectedFolder ?? "");
+    }
+    if (assignFolderId === folderIdToDelete) {
+      setAssignFolderId(nextSelectedFolder ?? "");
+    }
+    setStatusMessage(`Deleting ${folderIdToDelete}...`);
+
+    try {
+      const res = await authFetch(`${apiBase}/folders`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: folderIdToDelete }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Delete failed.");
+      }
+      setStatusMessage(`Deleted folder ${payload.folderId}`);
+      loadFolders().catch(() => undefined);
+    } catch (err) {
+      setFolders(previousFolders);
+      setSelectedFolder(previousSelectedFolder);
+      setInviteFolderId(previousInviteFolderId);
+      setUploadFolderId(previousUploadFolderId);
+      setAssignFolderId(previousAssignFolderId);
+      setStatusMessage(err instanceof Error ? err.message : "Delete failed.");
+    }
   };
 
   const deletePhoto = async (key: string) => {
@@ -498,21 +530,28 @@ export default function Admin() {
     }
     const confirmed = window.confirm(`Delete "${getFileName(key)}"? This cannot be undone.`);
     if (!confirmed) return;
+
+    const previousItems = folderItems;
     setActionKey(key);
-    const res = await authFetch(`${apiBase}/delete-photo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setStatusMessage(payload?.message ?? "Delete failed.");
-      setActionKey(null);
-      return;
-    }
     setFolderItems((prev) => prev.filter((item) => (item.storageKey ?? item.key) !== key));
-    setStatusMessage(`Deleted ${payload.deletedKey ?? key}`);
-    setActionKey(null);
+    setStatusMessage(`Removing ${getFileName(key)}...`);
+    try {
+      const res = await authFetch(`${apiBase}/delete-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Delete failed.");
+      }
+      setStatusMessage(`Deleted ${payload.deletedKey ?? key}`);
+    } catch (err) {
+      setFolderItems(previousItems);
+      setStatusMessage(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setActionKey(null);
+    }
   };
 
   const duplicatePhoto = async (key: string) => {
@@ -530,6 +569,7 @@ export default function Admin() {
       return;
     }
     setActionKey(key);
+    setStatusMessage(`Duplicating ${getFileName(key)}...`);
     const res = await authFetch(`${apiBase}/duplicate-photo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -565,24 +605,30 @@ export default function Admin() {
       setStatusMessage("Choose a different destination folder.");
       return;
     }
+    const previousItems = folderItems;
     setActionKey(key);
-    const res = await authFetch(`${apiBase}/move-photo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sourceKey: key,
-        destinationFolderId: itemsMoveTarget,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok) {
-      setStatusMessage(payload?.message ?? "Move failed.");
-      setActionKey(null);
-      return;
-    }
     setFolderItems((prev) => prev.filter((item) => (item.storageKey ?? item.key) !== key));
-    setStatusMessage(`Moved to ${payload.destinationKey ?? itemsMoveTarget}`);
-    setActionKey(null);
+    setStatusMessage(`Moving ${getFileName(key)} to ${itemsMoveTarget}...`);
+    try {
+      const res = await authFetch(`${apiBase}/move-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceKey: key,
+          destinationFolderId: itemsMoveTarget,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        throw new Error(payload?.message ?? "Move failed.");
+      }
+      setStatusMessage(`Moved to ${payload.destinationKey ?? itemsMoveTarget}`);
+    } catch (err) {
+      setFolderItems(previousItems);
+      setStatusMessage(err instanceof Error ? err.message : "Move failed.");
+    } finally {
+      setActionKey(null);
+    }
   };
 
   const backfillFolderUsers = async () => {
@@ -617,7 +663,10 @@ export default function Admin() {
       `Remove ${username} from ${selectedFolder}? They will no longer have access to this folder.`,
     );
     if (!confirmed) return;
+    const previousFolderUsers = folderUsers;
     setUserActionKey(username);
+    setFolderUsers((prev) => prev.filter((entry) => entry.username !== username));
+    setUsersError(null);
     try {
       const res = await authFetch(`${apiBase}/folder-users-remove`, {
         method: "POST",
@@ -628,9 +677,8 @@ export default function Admin() {
       if (!res.ok) {
         throw new Error(payload?.message ?? "Remove failed.");
       }
-      setFolderUsers((prev) => prev.filter((entry) => entry.username !== username));
-      loadFolderUsers(selectedFolder).catch(() => undefined);
     } catch (err) {
+      setFolderUsers(previousFolderUsers);
       const message = err instanceof Error ? err.message : "Remove failed.";
       setUsersError(message);
     } finally {
@@ -644,7 +692,10 @@ export default function Admin() {
       `Unban ${username} for ${selectedFolder}? They can accept invites again.`,
     );
     if (!confirmed) return;
+    const previousBannedUsers = bannedUsers;
     setUserActionKey(username);
+    setBannedUsers((prev) => prev.filter((entry) => entry.username !== username));
+    setBannedError(null);
     try {
       const res = await authFetch(`${apiBase}/folder-users-unban`, {
         method: "POST",
@@ -655,8 +706,8 @@ export default function Admin() {
       if (!res.ok) {
         throw new Error(payload?.message ?? "Unban failed.");
       }
-      setBannedUsers((prev) => prev.filter((entry) => entry.username !== username));
     } catch (err) {
+      setBannedUsers(previousBannedUsers);
       const message = err instanceof Error ? err.message : "Unban failed.";
       setBannedError(message);
     } finally {
@@ -680,6 +731,21 @@ export default function Admin() {
 
     setStatusMessage(null);
     setAddUserLoading(true);
+    const optimisticUser =
+      selectedFolder === assignFolderId &&
+      selectedAssignableUser &&
+      !folderUsers.some((entry) => entry.username === selectedAssignableUser.username)
+        ? {
+            ...selectedAssignableUser,
+            folderId: assignFolderId,
+            fullName: buildFullName(selectedAssignableUser),
+          }
+        : null;
+    const previousFolderUsers = folderUsers;
+    if (optimisticUser) {
+      setFolderUsers((prev) => [...prev, optimisticUser]);
+    }
+    setStatusMessage(`Adding ${selectedAssignableUser.username} to ${assignFolderId}...`);
     try {
       const res = await authFetch(`${apiBase}/folder-users-add`, {
         method: "POST",
@@ -694,10 +760,8 @@ export default function Admin() {
         throw new Error(payload?.message ?? "Failed to add user.");
       }
       setStatusMessage(`Added ${selectedAssignableUser.username} to ${assignFolderId}.`);
-      if (selectedFolder === assignFolderId) {
-        loadFolderUsers(assignFolderId).catch(() => undefined);
-      }
     } catch (err) {
+      setFolderUsers(previousFolderUsers);
       const message = err instanceof Error ? err.message : "Failed to add user.";
       setStatusMessage(message);
     } finally {
@@ -717,8 +781,26 @@ export default function Admin() {
       return;
     }
 
+    const previousItems = folderItems;
+    const previousAvailableTags = availableTags;
     setStatusMessage(null);
     setTagActionKey(photoKey);
+    setFolderItems((prev) =>
+      prev.map((item) =>
+        item.key === photoKey
+          ? {
+              ...item,
+              tags: confirmedTags,
+            }
+          : item,
+      ),
+    );
+    setAvailableTags((prev) => normalizeTags([...prev, ...confirmedTags]));
+    setStatusMessage(
+      confirmedTags.length > 0
+        ? `Saving tags for ${getFileName(photoKey)}...`
+        : `Removing all tags from ${getFileName(photoKey)}...`,
+    );
     try {
       const res = await authFetch(`${apiBase}/photo-tags`, {
         method: "POST",
@@ -728,27 +810,114 @@ export default function Admin() {
       const payload = await res.json();
       if (!res.ok) {
         throw new Error(payload?.message ?? "Failed to update tags.");
+        }
+  
+        setFolderItems((prev) =>
+          prev.map((item) =>
+            item.key === photoKey
+              ? {
+                  ...item,
+                  tags: Array.isArray(payload.tags) ? payload.tags : confirmedTags,
+                }
+              : item,
+          ),
+        );
+        setStatusMessage(
+          confirmedTags.length > 0
+            ? `Saved tags for ${getFileName(photoKey)}.`
+            : `Removed all tags from ${getFileName(photoKey)}.`,
+        );
+        loadTags().catch(() => undefined);
+      } catch (err) {
+        setFolderItems(previousItems);
+        setAvailableTags(previousAvailableTags);
+        setStatusMessage(err instanceof Error ? err.message : "Failed to update tags.");
+      } finally {
+        setTagActionKey(null);
+      }
+    };
+
+  const saveBulkPhotoTags = async (updates: Array<{ photoKey: string; tags: string[] }>) => {
+    if (!apiBase) {
+      setStatusMessage("REACT_APP_PHOTO_API_URL is not configured.");
+      return;
+    }
+
+    if (updates.length === 0) {
+      setStatusMessage("No tag changes to apply.");
+      return;
+    }
+
+    const allProposedTags = normalizeTags(updates.flatMap((entry) => entry.tags));
+    const confirmedTags = confirmNewTags(allProposedTags);
+    if (confirmedTags === null) {
+      setStatusMessage("Batch tag update cancelled.");
+      return;
+    }
+
+    const allowedTagKeys = new Set(confirmedTags.map(buildTagKey));
+    const confirmedUpdates = updates.map((entry) => ({
+      photoKey: entry.photoKey,
+      tags: entry.tags.filter((tag) => allowedTagKeys.has(buildTagKey(tag))),
+    }));
+
+    setStatusMessage(null);
+    setTagActionKey("bulk-tags");
+    const previousItems = folderItems;
+    const previousAvailableTags = availableTags;
+    const optimisticTagsByKey = new Map(confirmedUpdates.map((entry) => [entry.photoKey, entry.tags]));
+    setFolderItems((prev) =>
+      prev.map((item) =>
+        optimisticTagsByKey.has(item.key)
+          ? {
+              ...item,
+              tags: optimisticTagsByKey.get(item.key),
+            }
+          : item,
+      ),
+    );
+    setAvailableTags((prev) => normalizeTags([...prev, ...confirmedTags]));
+    setStatusMessage(
+      confirmedUpdates.length === 1
+        ? `Saving tags for ${getFileName(confirmedUpdates[0].photoKey)}...`
+        : `Saving batch tags for ${confirmedUpdates.length} photos...`,
+    );
+
+    try {
+      for (const update of confirmedUpdates) {
+        const res = await authFetch(`${apiBase}/photo-tags`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photoKey: update.photoKey, tags: update.tags }),
+        });
+        const payload = await res.json();
+        if (!res.ok) {
+          throw new Error(payload?.message ?? `Failed to update ${getFileName(update.photoKey)}.`);
+        }
+
+        setFolderItems((prev) =>
+          prev.map((item) =>
+            item.key === update.photoKey
+              ? {
+                  ...item,
+                  tags: Array.isArray(payload.tags) ? payload.tags : update.tags,
+                }
+              : item,
+          ),
+        );
       }
 
-      setFolderItems((prev) =>
-        prev.map((item) =>
-          item.key === photoKey
-            ? {
-                ...item,
-                tags: Array.isArray(payload.tags) ? payload.tags : confirmedTags,
-              }
-            : item,
-        ),
-      );
       setAvailableTags((prev) => normalizeTags([...prev, ...confirmedTags]));
       setStatusMessage(
-        confirmedTags.length > 0
-          ? `Saved tags for ${getFileName(photoKey)}.`
-          : `Removed all tags from ${getFileName(photoKey)}.`,
+        confirmedUpdates.length === 1
+          ? `Saved tags for ${getFileName(confirmedUpdates[0].photoKey)}.`
+          : `Saved batch tags for ${confirmedUpdates.length} photos.`,
       );
       loadTags().catch(() => undefined);
     } catch (err) {
-      setStatusMessage(err instanceof Error ? err.message : "Failed to update tags.");
+      setFolderItems(previousItems);
+      setAvailableTags(previousAvailableTags);
+      setStatusMessage(err instanceof Error ? err.message : "Failed to apply batch tags.");
     } finally {
       setTagActionKey(null);
     }
@@ -760,8 +929,19 @@ export default function Admin() {
       return;
     }
 
+    const previousCatalog = tagCatalog;
     setTagCatalogError(null);
     setTagActionKey(tag.tagKey);
+    setTagCatalog((prev) =>
+      prev.map((entry) =>
+        entry.tagKey === tag.tagKey
+          ? {
+              ...entry,
+              showOnHome,
+            }
+          : entry,
+      ),
+    );
     try {
       const res = await authFetch(`${apiBase}/tag-catalog`, {
         method: "POST",
@@ -789,15 +969,16 @@ export default function Admin() {
             : entry,
         ),
       );
-      setStatusMessage(
-        `${tag.label} ${showOnHome ? "will appear" : "will stay hidden"} on the home screen.`,
-      );
-    } catch (err) {
-      setTagCatalogError(err instanceof Error ? err.message : "Failed to update home visibility.");
-    } finally {
-      setTagActionKey(null);
-    }
-  };
+        setStatusMessage(
+          `${tag.label} ${showOnHome ? "will appear" : "will stay hidden"} on the home screen.`,
+        );
+      } catch (err) {
+        setTagCatalog(previousCatalog);
+        setTagCatalogError(err instanceof Error ? err.message : "Failed to update home visibility.");
+      } finally {
+        setTagActionKey(null);
+      }
+    };
 
   const reorderHomeTags = async (orderedTags: TagCatalogEntry[]) => {
     if (!apiBase) {
@@ -816,13 +997,14 @@ export default function Admin() {
     if (changedTags.length === 0) {
       return;
     }
-    const reorderedByKey = new Map(orderedTags.map((entry, index) => [entry.tagKey, index]));
-    const movedLabel = changedTags[0]?.label ?? "tag";
-
-    setTagCatalog((prev) => prev.map((entry) => ({
-      ...entry,
-      sortOrder: reorderedByKey.get(entry.tagKey) ?? entry.sortOrder,
-    })));
+      const reorderedByKey = new Map(orderedTags.map((entry, index) => [entry.tagKey, index]));
+      const movedLabel = changedTags[0]?.label ?? "tag";
+      const previousCatalog = tagCatalog;
+  
+      setTagCatalog((prev) => prev.map((entry) => ({
+        ...entry,
+        sortOrder: reorderedByKey.get(entry.tagKey) ?? entry.sortOrder,
+      })));
 
     setTagCatalogError(null);
     setTagActionKey(changedTags[0]?.tagKey ?? null);
@@ -846,15 +1028,15 @@ export default function Admin() {
         throw new Error(payloads[failedIndex]?.message ?? "Failed to reorder tags.");
       }
 
-      setStatusMessage(`Updated the home collection order for ${movedLabel}.`);
-      loadTags().catch(() => undefined);
-    } catch (err) {
-      setTagCatalogError(err instanceof Error ? err.message : "Failed to reorder tags.");
-      loadTags().catch(() => undefined);
-    } finally {
-      setTagActionKey(null);
-    }
-  };
+        setStatusMessage(`Updated the home collection order for ${movedLabel}.`);
+        loadTags().catch(() => undefined);
+      } catch (err) {
+        setTagCatalog(previousCatalog);
+        setTagCatalogError(err instanceof Error ? err.message : "Failed to reorder tags.");
+      } finally {
+        setTagActionKey(null);
+      }
+    };
 
   useEffect(() => {
     setDirectoryGivenName(selectedDirectoryUser?.givenName ?? "");
@@ -868,9 +1050,7 @@ export default function Admin() {
         ? {
             ...entry,
             ...updatedUser,
-            fullName:
-              [updatedUser.givenName, updatedUser.familyName].filter(Boolean).join(" ") ||
-              updatedUser.name,
+            fullName: buildFullName(updatedUser),
           }
         : entry;
 
@@ -878,17 +1058,15 @@ export default function Admin() {
     setFolderUsers((prev) => prev.map(normalize));
     setBannedUsers((prev) => prev.map(normalize));
     setSelectedDirectoryUser((prev) =>
-      prev?.username === updatedUser.username
-        ? {
-            ...prev,
-            ...updatedUser,
-            fullName:
-              [updatedUser.givenName, updatedUser.familyName].filter(Boolean).join(" ") ||
-              updatedUser.name,
-          }
-        : prev,
-    );
-  }, []);
+        prev?.username === updatedUser.username
+          ? {
+              ...prev,
+              ...updatedUser,
+              fullName: buildFullName(updatedUser),
+            }
+          : prev,
+      );
+    }, [buildFullName]);
 
   const saveDirectoryUser = async () => {
     if (!apiBase || !selectedDirectoryUser) {
@@ -905,6 +1083,16 @@ export default function Admin() {
     }
 
     setSaveUserLoading(true);
+    const previousSelectedDirectoryUser = selectedDirectoryUser;
+    const optimisticUser: FolderUser = {
+      ...selectedDirectoryUser,
+      givenName: nextGivenName,
+      familyName: nextFamilyName,
+      name: `${nextGivenName} ${nextFamilyName}`.trim(),
+      fullName: `${nextGivenName} ${nextFamilyName}`.trim(),
+    };
+    applyUpdatedUser(optimisticUser);
+    setSaveUserMessage(`Saving ${getDisplayUserName(optimisticUser)}...`);
     try {
       const res = await authFetch(`${apiBase}/users/update`, {
         method: "POST",
@@ -920,25 +1108,26 @@ export default function Admin() {
         throw new Error(payload?.message ?? "Failed to update user.");
       }
 
-      const updatedUser: FolderUser = {
-        ...selectedDirectoryUser,
-        givenName: payload.givenName,
-        familyName: payload.familyName,
-        name: payload.name,
-        fullName: payload.name,
-      };
-      applyUpdatedUser(updatedUser);
-      setSaveUserMessage(`Updated ${getDisplayUserName(updatedUser)}.`);
-      loadAllUsers().catch(() => undefined);
-      if (selectedFolder && selectedFolder !== "public") {
-        loadFolderUsers(selectedFolder).catch(() => undefined);
+        const updatedUser: FolderUser = {
+          ...selectedDirectoryUser,
+          givenName: payload.givenName,
+          familyName: payload.familyName,
+          name: payload.name,
+          fullName: payload.name,
+        };
+        applyUpdatedUser(updatedUser);
+        setSaveUserMessage(`Updated ${getDisplayUserName(updatedUser)}.`);
+        loadAllUsers().catch(() => undefined);
+        if (selectedFolder && selectedFolder !== "public") {
+          loadFolderUsers(selectedFolder).catch(() => undefined);
+        }
+      } catch (err) {
+        applyUpdatedUser(previousSelectedDirectoryUser);
+        setSaveUserMessage(err instanceof Error ? err.message : "Failed to update user.");
+      } finally {
+        setSaveUserLoading(false);
       }
-    } catch (err) {
-      setSaveUserMessage(err instanceof Error ? err.message : "Failed to update user.");
-    } finally {
-      setSaveUserLoading(false);
-    }
-  };
+    };
 
   useEffect(() => {
     selectedFolderRef.current = selectedFolder;
@@ -1226,6 +1415,7 @@ export default function Admin() {
                       onMove={movePhotoFromList}
                       onDelete={deletePhoto}
                       onSaveTags={savePhotoTags}
+                      onSaveBulkTags={saveBulkPhotoTags}
                     />
 
                     <Box>

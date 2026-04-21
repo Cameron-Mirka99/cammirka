@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Box, Button, MenuItem, TextField, Typography } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import { Box, Button, Checkbox, Chip, Divider, MenuItem, TextField, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { Photo } from "../../types/photo";
 import { TagAutocompleteField } from "./TagAutocompleteField";
@@ -26,6 +26,7 @@ type FolderItemsSectionProps = {
   onMove: (key: string) => void;
   onDelete: (key: string) => void;
   onSaveTags: (photoKey: string, tags: string[]) => void;
+  onSaveBulkTags: (updates: Array<{ photoKey: string; tags: string[] }>) => void;
 };
 
 type FolderItemRowProps = {
@@ -35,6 +36,9 @@ type FolderItemRowProps = {
   actionKey: string | null;
   tagActionKey: string | null;
   itemsMoveTarget: string;
+  selected: boolean;
+  selectionDisabled: boolean;
+  onToggleSelected: (photoKey: string) => void;
   onDuplicate: (key: string) => void;
   onMove: (key: string) => void;
   onDelete: (key: string) => void;
@@ -48,6 +52,9 @@ function FolderItemRow({
   actionKey,
   tagActionKey,
   itemsMoveTarget,
+  selected,
+  selectionDisabled,
+  onToggleSelected,
   onDuplicate,
   onMove,
   onDelete,
@@ -79,11 +86,20 @@ function FolderItemRow({
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "132px minmax(0, 1fr) auto" },
+          gridTemplateColumns: { xs: "1fr", md: "auto 132px minmax(0, 1fr) auto" },
           gap: { xs: 1.5, md: 2 },
           alignItems: "center",
         }}
       >
+        <Box sx={{ display: "flex", justifyContent: { xs: "flex-start", md: "center" }, pt: { md: 0.25 } }}>
+          <Checkbox
+            checked={selected}
+            disabled={selectionDisabled}
+            onChange={() => onToggleSelected(item.key)}
+            inputProps={{ "aria-label": `Select ${fileName}` }}
+          />
+        </Box>
+
         <Box
           sx={{
             "@keyframes adminThumbSweep": {
@@ -241,8 +257,12 @@ export function FolderItemsSection({
   onMove,
   onDelete,
   onSaveTags,
+  onSaveBulkTags,
 }: FolderItemsSectionProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [batchAddTags, setBatchAddTags] = useState<string[]>([]);
+  const [batchRemoveTags, setBatchRemoveTags] = useState<string[]>([]);
   const selectedFolderLabel =
     folders.find((folder) => folder.folderId === selectedFolder)?.displayName ?? selectedFolder;
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -255,14 +275,106 @@ export function FolderItemsSection({
     : folderItems;
   const pagedItems = filteredItems.slice((itemsPage - 1) * itemsPerPage, itemsPage * itemsPerPage);
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / itemsPerPage));
+  const filteredKeys = filteredItems.map((item) => item.key);
+  const pagedKeys = pagedItems.map((item) => item.key);
+  const selectedKeySet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
+  const selectedItems = useMemo(
+    () => folderItems.filter((item) => selectedKeySet.has(item.key)),
+    [folderItems, selectedKeySet],
+  );
+  const selectedTagOptions = useMemo(
+    () =>
+      normalizeTags(
+        selectedItems.flatMap((item) => item.tags ?? []),
+      ),
+    [selectedItems],
+  );
+  const sharedSelectedTags = useMemo(() => {
+    if (selectedItems.length === 0) return [];
+    const [first, ...rest] = selectedItems;
+    const baseTags = normalizeTags(first.tags ?? []);
+    return baseTags.filter((tag) =>
+      rest.every((item) => normalizeTags(item.tags ?? []).includes(tag)),
+    );
+  }, [selectedItems]);
+  const bulkUpdates = useMemo(
+    () =>
+      selectedItems
+        .map((item) => {
+          const currentTags = normalizeTags(item.tags ?? []);
+          const withoutRemoved = currentTags.filter((tag) => !batchRemoveTags.includes(tag));
+          const nextTags = normalizeTags([...withoutRemoved, ...batchAddTags]);
+          const changed =
+            nextTags.length !== currentTags.length ||
+            nextTags.some((tag, index) => tag !== currentTags[index]);
+
+          return changed ? { photoKey: item.key, tags: nextTags } : null;
+        })
+        .filter((entry): entry is { photoKey: string; tags: string[] } => Boolean(entry)),
+    [batchAddTags, batchRemoveTags, selectedItems],
+  );
+  const bulkBusy = tagActionKey === "bulk-tags";
+  const selectedOnPageCount = pagedKeys.filter((key) => selectedKeySet.has(key)).length;
+  const selectedInFilterCount = filteredKeys.filter((key) => selectedKeySet.has(key)).length;
+  const addCoverage = batchAddTags.map((tag) => ({
+    tag,
+    alreadyApplied: selectedItems.filter((item) => normalizeTags(item.tags ?? []).includes(tag)).length,
+  }));
+  const removeCoverage = batchRemoveTags.map((tag) => ({
+    tag,
+    appliedCount: selectedItems.filter((item) => normalizeTags(item.tags ?? []).includes(tag)).length,
+  }));
+
+  const updateSelection = (updater: (current: Set<string>) => Set<string>) => {
+    setSelectedKeys((current) => Array.from(updater(new Set(current))));
+  };
+
+  const toggleSelected = (photoKey: string) => {
+    updateSelection((current) => {
+      if (current.has(photoKey)) {
+        current.delete(photoKey);
+      } else {
+        current.add(photoKey);
+      }
+      return current;
+    });
+  };
+
+  const selectKeys = (keys: string[]) => {
+    updateSelection((current) => {
+      keys.forEach((key) => current.add(key));
+      return current;
+    });
+  };
+
+  const clearKeys = (keys?: string[]) => {
+    updateSelection((current) => {
+      if (!keys) return new Set<string>();
+      keys.forEach((key) => current.delete(key));
+      return current;
+    });
+  };
 
   useEffect(() => {
     setSearchQuery("");
+    setSelectedKeys([]);
+    setBatchAddTags([]);
+    setBatchRemoveTags([]);
   }, [selectedFolder]);
 
   useEffect(() => {
     setItemsPage(() => 1);
   }, [normalizedQuery, setItemsPage]);
+
+  useEffect(() => {
+    setSelectedKeys((current) => current.filter((key) => folderItems.some((item) => item.key === key)));
+  }, [folderItems]);
+
+  useEffect(() => {
+    if (selectedItems.length > 0) return;
+    setBatchAddTags([]);
+    setBatchRemoveTags([]);
+  }, [selectedItems.length]);
 
   return (
     <Box
@@ -297,10 +409,10 @@ export function FolderItemsSection({
             <Typography variant="h5" sx={{ mb: 0.75 }}>
               {selectedFolder ? `Review ${selectedFolderLabel}` : "Choose a folder to start"}
             </Typography>
-            <Typography sx={{ color: mutedText, maxWidth: 780 }}>
-              This is the working surface for gallery items. Thumbnail frames keep their shape before assets load, tags can be edited inline, and search now matches filenames, storage keys, and assigned tags.
-            </Typography>
-          </Box>
+          <Typography sx={{ color: mutedText, maxWidth: 780 }}>
+              This is the working surface for gallery items. Select a run of photos, apply a tag recipe once, and keep inline editing available for one-off clean-up.
+          </Typography>
+        </Box>
 
           <Box
             sx={{
@@ -337,6 +449,152 @@ export function FolderItemsSection({
       </Box>
 
       <Box sx={{ px: { xs: 2.25, md: 3 }, py: 2.25 }}>
+        {selectedItems.length > 0 && (
+          <Box
+            sx={{
+              position: "sticky",
+              top: { xs: 76, md: 92 },
+              zIndex: 2,
+              mb: 2.5,
+              borderRadius: 4,
+              border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+              background:
+                "linear-gradient(135deg, rgba(184, 138, 42, 0.12), rgba(184, 138, 42, 0.03) 40%, rgba(127, 138, 120, 0.1) 100%)",
+              backdropFilter: "blur(16px)",
+              boxShadow: `0 18px 38px ${alpha("#191713", 0.08)}`,
+              overflow: "hidden",
+            }}
+          >
+            <Box
+              sx={{
+                px: { xs: 2, md: 2.5 },
+                py: { xs: 1.75, md: 2.1 },
+                display: "grid",
+                gap: 1.75,
+              }}
+            >
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) auto" },
+                  gap: 1.5,
+                  alignItems: "start",
+                }}
+              >
+                <Box>
+                  <Typography variant="subtitle1" sx={{ color: "primary.main", mb: 0.75 }}>
+                    Batch Tag Tray
+                  </Typography>
+                  <Typography variant="h6" sx={{ mb: 0.5 }}>
+                    {selectedItems.length} {selectedItems.length === 1 ? "photo selected" : "photos selected"}
+                  </Typography>
+                  <Typography sx={{ color: mutedText, maxWidth: 760 }}>
+                    Add tags to the entire selection, strip tags that no longer fit, then save only the files whose tag sets actually changed.
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: { lg: "flex-end" } }}>
+                  <Chip label={`${bulkUpdates.length} pending updates`} size="small" color="primary" variant="outlined" />
+                  {sharedSelectedTags.length > 0 && (
+                    <Chip
+                      label={`Shared tags: ${sharedSelectedTags.slice(0, 2).join(", ")}${sharedSelectedTags.length > 2 ? ` +${sharedSelectedTags.length - 2}` : ""}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  )}
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) minmax(0, 1fr) auto" },
+                  gap: 1.5,
+                  alignItems: "start",
+                }}
+              >
+                <TagAutocompleteField
+                  value={batchAddTags}
+                  options={availableTags}
+                  label="Add to selected photos"
+                  helperText="Type a new tag once or pull from the existing catalog."
+                  placeholder="Add tags to every selected photo"
+                  disabled={bulkBusy}
+                  onChange={(value) => {
+                    const nextAddTags = normalizeTags(value);
+                    setBatchAddTags(nextAddTags);
+                    setBatchRemoveTags((current) => current.filter((tag) => !nextAddTags.includes(tag)));
+                  }}
+                />
+
+                <TagAutocompleteField
+                  value={batchRemoveTags}
+                  options={selectedTagOptions}
+                  label="Remove from selected photos"
+                  helperText="Only tags found in the current selection are suggested here."
+                  placeholder="Remove tags from the selection"
+                  disabled={bulkBusy}
+                  onChange={(value) => {
+                    const nextRemoveTags = normalizeTags(value).filter((tag) => !batchAddTags.includes(tag));
+                    setBatchRemoveTags(nextRemoveTags);
+                  }}
+                />
+
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: { xl: "flex-end" }, pt: { xl: 0.5 } }}>
+                  <Button
+                    variant="text"
+                    onClick={() => {
+                      setBatchAddTags([]);
+                      setBatchRemoveTags([]);
+                    }}
+                    disabled={bulkBusy || (batchAddTags.length === 0 && batchRemoveTags.length === 0)}
+                  >
+                    Reset recipe
+                  </Button>
+                  <Button
+                    variant="text"
+                    onClick={() => clearKeys()}
+                    disabled={bulkBusy}
+                  >
+                    Clear selection
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => onSaveBulkTags(bulkUpdates)}
+                    disabled={bulkBusy || bulkUpdates.length === 0}
+                  >
+                    {bulkBusy ? "Saving..." : `Apply to ${bulkUpdates.length}`}
+                  </Button>
+                </Box>
+              </Box>
+
+              {(addCoverage.length > 0 || removeCoverage.length > 0) && (
+                <>
+                  <Divider flexItem />
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    {addCoverage.map(({ tag, alreadyApplied }) => (
+                      <Chip
+                        key={`add-${tag}`}
+                        label={`+ ${tag} ${alreadyApplied === selectedItems.length ? "(already on all)" : `(${selectedItems.length - alreadyApplied} changes)`}`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ))}
+                    {removeCoverage.map(({ tag, appliedCount }) => (
+                      <Chip
+                        key={`remove-${tag}`}
+                        label={`- ${tag} ${appliedCount === 0 ? "(not present)" : `(${appliedCount} removals)`}`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                </>
+              )}
+            </Box>
+          </Box>
+        )}
+
         <Box
           sx={{
             display: "grid",
@@ -378,6 +636,31 @@ export function FolderItemsSection({
           </TextField>
 
           <Box sx={{ display: "flex", justifyContent: { xl: "flex-end" }, gap: 1, flexWrap: "wrap" }}>
+            {selectedFolder && filteredItems.length > 0 && (
+              <>
+                <Button
+                  variant="text"
+                  onClick={() => selectKeys(pagedKeys)}
+                  disabled={itemsLoading || selectedOnPageCount === pagedKeys.length}
+                >
+                  Select page
+                </Button>
+                <Button
+                  variant="text"
+                  onClick={() => selectKeys(filteredKeys)}
+                  disabled={itemsLoading || selectedInFilterCount === filteredKeys.length}
+                >
+                  Select all results
+                </Button>
+                <Button
+                  variant="text"
+                  onClick={() => clearKeys(filteredKeys)}
+                  disabled={itemsLoading || selectedInFilterCount === 0}
+                >
+                  Clear results
+                </Button>
+              </>
+            )}
             {searchQuery && (
               <Button variant="text" onClick={() => setSearchQuery("")}>
                 Clear search
@@ -405,6 +688,28 @@ export function FolderItemsSection({
           </Box>
         ) : (
           <Box>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1.5,
+                flexWrap: "wrap",
+                mb: 1,
+                px: { md: 0.5 },
+              }}
+            >
+              <Typography sx={{ color: mutedText, fontSize: "0.84rem" }}>
+                {selectedItems.length > 0
+                  ? `${selectedItems.length} selected across ${filteredItems.length} matching items.`
+                  : "Use selection to batch tag a run of photos before saving."}
+              </Typography>
+              {selectedItems.length > 0 && sharedSelectedTags.length > 0 && (
+                <Typography sx={{ color: mutedText, fontSize: "0.84rem" }}>
+                  Shared across selection: {sharedSelectedTags.join(", ")}
+                </Typography>
+              )}
+            </Box>
             {pagedItems.map((item) => (
               <FolderItemRow
                 key={item.key}
@@ -414,6 +719,9 @@ export function FolderItemsSection({
                 actionKey={actionKey}
                 tagActionKey={tagActionKey}
                 itemsMoveTarget={itemsMoveTarget}
+                selected={selectedKeySet.has(item.key)}
+                selectionDisabled={bulkBusy}
+                onToggleSelected={toggleSelected}
                 onDuplicate={onDuplicate}
                 onMove={onMove}
                 onDelete={onDelete}
