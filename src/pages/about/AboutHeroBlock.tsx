@@ -73,7 +73,7 @@ export function AboutHeroBlock({ heroPhoto }: AboutHeroBlockProps) {
                 fontSize: { xs: "1rem", md: "1.08rem" },
               }}
             >
-              I photograph wildlife around Central Ohio, usually by going back to the same trails, wetlands, and tree
+              I photograph wildlife beautiful Central Ohio, usually by going back to the same trails, wetlands, and tree
               lines until something familiar starts to feel new again.
             </Typography>
           </MotionReveal>

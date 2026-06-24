@@ -118,7 +118,7 @@ export function HomeHeroSection({ heroPhoto }: HomeHeroSectionProps) {
                   fontSize: { xs: "1rem", md: "1.08rem" },
                 }}
               >
-                A collection of mornings, small encounters, and time spent outside around Central Ohio.
+                A collection of mornings, small encounters, and time spent outside Central Ohio.
               </Typography>
             </MotionReveal>
             <MotionReveal delay={420}>
