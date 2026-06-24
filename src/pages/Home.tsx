@@ -187,7 +187,7 @@ function Home() {
                   maxWidth: 860,
                 }}
               >
-                Wildlife photographs from beautiful Central Ohio.
+                Wildlife photographs from Central Ohio.
               </Typography>
               <Typography
                 variant="body1"
