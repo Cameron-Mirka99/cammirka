@@ -49,6 +49,10 @@ export function LightboxOverlay({
   const [downloading, setDownloading] = React.useState(false);
   const imageRef = React.useRef<HTMLImageElement | null>(null);
   const selectedPhoto = selectedIndex !== null ? photos[selectedIndex] : null;
+  const selectedPhotoTitle = React.useMemo(() => {
+    if (!selectedPhoto) return "";
+    return getPhotoTitle(selectedPhoto);
+  }, [selectedPhoto]);
 
   const goToPrevious = React.useCallback(() => {
     setSelectedIndex((current) => (current === null ? current : (current - 1 + photos.length) % photos.length));
@@ -394,7 +398,7 @@ export function LightboxOverlay({
                       component="img"
                       ref={imageRef}
                       src={photoCache.get(selectedPhoto.url) || selectedPhoto.url}
-                      alt=""
+                      alt={selectedPhotoTitle}
                       draggable={false}
                       onContextMenu={(event) => event.preventDefault()}
                       sx={{
@@ -429,9 +433,28 @@ export function LightboxOverlay({
                     mx: "auto",
                   }}
                 >
-                  <Typography sx={{ color: alpha("#F7F1E3", 0.76), letterSpacing: "0.14em", textTransform: "uppercase", fontSize: "0.7rem" }}>
-                    Frame {selectedIndex! + 1} of {photos.length}
-                  </Typography>
+                  <Box
+                    sx={{
+                      minWidth: 0,
+                      maxWidth: { xs: "100%", sm: "42%" },
+                      textAlign: { xs: "center", sm: "left" },
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        color: "#F7F1E3",
+                        fontWeight: 500,
+                        lineHeight: 1.15,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {selectedPhotoTitle}
+                    </Typography>
+                    <Typography sx={{ color: alpha("#F7F1E3", 0.62), letterSpacing: "0.14em", textTransform: "uppercase", fontSize: "0.68rem", mt: 0.5 }}>
+                      Frame {selectedIndex! + 1} of {photos.length}
+                    </Typography>
+                  </Box>
                   {photos.length > 1 && isMobile && (
                     <Box
                       sx={{
@@ -505,4 +528,22 @@ export function LightboxOverlay({
       </Backdrop>
     </Portal>
   );
+}
+
+function getPhotoTitle(photo: Photo) {
+  const explicitTitle = photo.title?.trim();
+  if (explicitTitle) return explicitTitle;
+
+  const fileName = photo.key.split("/").pop() ?? photo.key;
+  const decodedFileName = safelyDecodeURIComponent(fileName);
+  const title = decodedFileName.replace(/\.[^.]+$/, "").trim();
+  return title || decodedFileName || "Untitled image";
+}
+
+function safelyDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

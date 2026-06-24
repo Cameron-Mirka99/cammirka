@@ -3,5 +3,6 @@ export type Photo = {
   storageKey?: string;
   url: string;
   thumbnailUrl?: string;
+  title?: string;
   tags?: string[];
 };

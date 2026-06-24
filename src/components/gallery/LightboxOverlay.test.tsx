@@ -25,7 +25,7 @@ function renderOverlay(showDownload = false, setSelectedIndex = jest.fn()) {
     <ThemeModeProvider>
       <LightboxOverlay
         photos={[
-          { key: "family/photo-1.jpg", storageKey: "family/full/photo-1.jpg", url: "https://cdn.example.com/photo-1.jpg" },
+          { key: "family/photo-1.jpg", storageKey: "family/full/photo-1.jpg", url: "https://cdn.example.com/photo-1.jpg", title: "Great Blue Heron" },
           { key: "family/photo-2.jpg", storageKey: "family/full/photo-2.jpg", url: "https://cdn.example.com/photo-2.jpg" },
         ]}
         selectedIndex={0}
@@ -48,6 +48,12 @@ describe("LightboxOverlay", () => {
   it("shows the download button only when enabled", () => {
     renderOverlay(false);
     expect(screen.queryByRole("button", { name: /download full resolution/i })).not.toBeInTheDocument();
+  });
+
+  it("displays the selected photo title in the viewer", () => {
+    renderOverlay(false);
+    expect(screen.getByText("Great Blue Heron")).toBeInTheDocument();
+    expect(screen.getByAltText("Great Blue Heron")).toBeInTheDocument();
   });
 
   it("requests a signed download URL for private gallery downloads", async () => {
