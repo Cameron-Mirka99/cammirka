@@ -77,9 +77,10 @@ directly in `amplify/`:
 - `deleteFolder` now cascades: cleans up `FolderUsersTable`,
   `BannedFolderUsersTable`, the folder's `InvitesTable` row, and every
   photo's tag rows, instead of leaving them orphaned.
-- Real server-side thumbnail resizing via `sharp` in `uploadImageFunction`
-  (was a no-op stub before — all downscaling happened client-side only).
-  Also captures real photo width/height at upload time.
+- Real server-side thumbnail resizing via `jimp` (pure JS, no native
+  binary) in `uploadImageFunction` (was a no-op stub before — all
+  downscaling happened client-side only). Also captures real photo
+  width/height at upload time.
 - Invites can be rotated (`InvitePanel` → "Rotate") — generates a new code
   and immediately invalidates the old one, instead of one code living
   forever.
