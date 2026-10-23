@@ -3,12 +3,19 @@ backend:
   phases:
     build:
       commands:
-        # npm ci instead of npm install: some of @aws-amplify/backend-cli's
+        # npm install, not npm ci: some of @aws-amplify/backend-cli's
         # transitive deps (bundled OpenTelemetry copies inside
         # @aws-amplify/data-construct / graphql-api-construct) carry baked-in
         # dependency metadata that's internally inconsistent with what npm
         # actually hoists -- npm ci's stricter lockfile-sync check fails on
         # that even though a plain install reconciles it fine every time.
+        #
+        # rm -rf node_modules first: Amplify Hosting restores a cached
+        # node_modules before this runs, and `npm install` on top of a stale
+        # cache (rather than a clean install) has produced at least one
+        # corrupted transitive package (chalk) that crashed ampx outright.
+        # A clean install every time removes that whole failure class.
+        - rm -rf node_modules
         - npm install
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID --outputs-out-dir src --outputs-format json
 # TODO: this frontend phase still assumes the old CRA build (a static
@@ -19,6 +26,7 @@ frontend:
   phases:
     preBuild:
       commands:
+        - rm -rf node_modules
         - npm install
     build:
       commands:
