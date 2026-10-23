@@ -47,6 +47,12 @@ export function Lightbox({
     [photos.length, setSelectedIndex]
   );
 
+  // Keyed on photo.key/selectedIndex, not the photo object or photos array
+  // themselves -- toggling `liked` (or any other metadata) produces a new
+  // object/array for the SAME photo, and re-running this on every such
+  // change would reset zoom/pan and restart the image load for no reason
+  // (if the resolved src string happens to be unchanged, the <img> element
+  // never re-fires onLoad, leaving imgLoaded stuck false indefinitely).
   useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -66,7 +72,8 @@ export function Lightbox({
       preloadBlob(next.url).catch(() => {});
       preloadBlob(prev.url).catch(() => {});
     }
-  }, [photo, selectedIndex, photos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo?.key, selectedIndex]);
 
   useEffect(() => {
     if (!open) return;

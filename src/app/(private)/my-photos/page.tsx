@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { fetchAllFolders, fetchUserFolders } from "@/lib/api/folders";
@@ -102,9 +102,12 @@ export default function MyPhotosPage() {
     return () => controller.abort();
   }, [selectedFolderId]);
 
-  const bulkPhotos = photos.filter((p) => p.category === "bulk");
-  const finalPhotos = photos.filter((p) => p.category !== "bulk");
-  const visibleBulkPhotos = likedOnly ? bulkPhotos.filter((p) => p.liked) : bulkPhotos;
+  const bulkPhotos = useMemo(() => photos.filter((p) => p.category === "bulk"), [photos]);
+  const finalPhotos = useMemo(() => photos.filter((p) => p.category !== "bulk"), [photos]);
+  const visibleBulkPhotos = useMemo(
+    () => (likedOnly ? bulkPhotos.filter((p) => p.liked) : bulkPhotos),
+    [likedOnly, bulkPhotos]
+  );
   const selectedFolder = folders?.find((f) => f.folderId === selectedFolderId);
 
   // The Bulk tab only exists while the folder actually has bulk photos --
