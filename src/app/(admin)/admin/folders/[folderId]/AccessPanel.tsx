@@ -64,7 +64,7 @@ export function AccessPanel({ folderId }: { folderId: string }) {
                 <span>{m.name ?? m.email ?? m.username}</span>
                 <button
                   onClick={() => removeUser.mutate(m.username)}
-                  className="text-xs uppercase tracking-wide text-red-500 hover:underline"
+                  className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
                 >
                   Remove
                 </button>
@@ -83,7 +83,7 @@ export function AccessPanel({ folderId }: { folderId: string }) {
                 <span>{m.name ?? m.email ?? m.username}</span>
                 <button
                   onClick={() => unbanUser.mutate(m.username)}
-                  className="text-xs uppercase tracking-wide text-accent hover:underline"
+                  className="rounded-full border border-accent px-3 py-1 text-xs uppercase tracking-wide text-accent transition-colors hover:bg-accent hover:text-white"
                 >
                   Unban
                 </button>
@@ -115,7 +115,7 @@ export function AccessPanel({ folderId }: { folderId: string }) {
                 <button
                   onClick={() => addUser.mutate(u.username)}
                   disabled={addUser.isPending}
-                  className="text-xs uppercase tracking-wide text-accent hover:underline"
+                  className="rounded-full border border-accent px-3 py-1 text-xs uppercase tracking-wide text-accent transition-colors hover:bg-accent hover:text-white disabled:opacity-50"
                 >
                   Add
                 </button>

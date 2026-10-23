@@ -63,18 +63,21 @@ export function InvitePanel({ folderId }: { folderId: string }) {
             <button
               onClick={() => rotate.mutate()}
               disabled={rotate.isPending}
-              className="text-red-500 underline disabled:opacity-50"
+              className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white disabled:opacity-50"
             >
               {rotate.isPending ? "Rotating…" : "Confirm"}
             </button>
-            <button onClick={() => setConfirmingRotate(false)} className="text-muted">
+            <button
+              onClick={() => setConfirmingRotate(false)}
+              className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface"
+            >
               Cancel
             </button>
           </span>
         ) : (
           <button
             onClick={() => setConfirmingRotate(true)}
-            className="text-xs uppercase tracking-wide text-red-500 hover:underline"
+            className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
           >
             Rotate (invalidates old link)
           </button>
@@ -85,7 +88,7 @@ export function InvitePanel({ folderId }: { folderId: string }) {
           <code className="flex-1 truncate text-xs">{inviteUrl}</code>
           <button
             onClick={copy}
-            className="shrink-0 text-xs uppercase tracking-wide text-accent hover:underline"
+            className="shrink-0 rounded-full border border-accent px-3 py-1 text-xs uppercase tracking-wide text-accent transition-colors hover:bg-accent hover:text-white"
           >
             {copied ? "Copied" : "Copy link"}
           </button>

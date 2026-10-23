@@ -37,17 +37,23 @@ export default function FolderDetailPage() {
             {confirmingDelete ? (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted">Delete this folder and all its photos?</span>
-                <button onClick={handleDelete} className="text-red-500 underline">
+                <button
+                  onClick={handleDelete}
+                  className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
+                >
                   Confirm
                 </button>
-                <button onClick={() => setConfirmingDelete(false)} className="text-muted">
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface"
+                >
                   Cancel
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setConfirmingDelete(true)}
-                className="text-xs uppercase tracking-wide text-red-500 hover:underline"
+                className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
               >
                 Delete folder
               </button>

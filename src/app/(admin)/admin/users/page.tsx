@@ -49,7 +49,7 @@ export default function UsersPage() {
             </div>
             <button
               onClick={() => setEditing(u)}
-              className="text-xs uppercase tracking-wide text-accent hover:underline"
+              className="rounded-full border border-accent px-3 py-1 text-xs uppercase tracking-wide text-accent transition-colors hover:bg-accent hover:text-white"
             >
               Edit name
             </button>
@@ -102,7 +102,10 @@ function EditUserDialog({ user, onClose }: { user: FolderUser; onClose: () => vo
         </div>
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
         <div className="mt-4 flex justify-end gap-3 text-sm">
-          <button onClick={onClose} className="text-muted">
+          <button
+            onClick={onClose}
+            className="rounded-full border border-border px-4 py-1.5 text-muted transition-colors hover:bg-background"
+          >
             Cancel
           </button>
           <button

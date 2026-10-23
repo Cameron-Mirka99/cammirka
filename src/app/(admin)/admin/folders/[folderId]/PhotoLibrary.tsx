@@ -145,26 +145,26 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         <button
           onClick={() => setSelectedKeys(new Set(pageItems.map((p) => p.key)))}
-          className="underline-offset-2 hover:underline"
+          className="rounded-full border border-border px-3 py-1 uppercase tracking-wide transition-colors hover:bg-surface"
         >
           Select page
         </button>
         <button
           onClick={() => setSelectedKeys(new Set(filtered.map((p) => p.key)))}
-          className="underline-offset-2 hover:underline"
+          className="rounded-full border border-border px-3 py-1 uppercase tracking-wide transition-colors hover:bg-surface"
         >
           Select all results
         </button>
         <button
           onClick={() => setSelectedKeys(new Set())}
-          className="underline-offset-2 hover:underline"
+          className="rounded-full border border-border px-3 py-1 uppercase tracking-wide transition-colors hover:bg-surface"
         >
           Clear
         </button>
-        <span>{selectedKeys.size} selected</span>
+        <span className="text-muted">{selectedKeys.size} selected</span>
 
         {destinationOptions.length > 0 && (
           <select
@@ -253,7 +253,7 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="disabled:opacity-40"
+            className="rounded-full border border-border px-3 py-1 transition-colors hover:bg-surface disabled:opacity-40"
           >
             ‹ Prev
           </button>
@@ -263,7 +263,7 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
           <button
             onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
             disabled={page === pageCount}
-            className="disabled:opacity-40"
+            className="rounded-full border border-border px-3 py-1 transition-colors hover:bg-surface disabled:opacity-40"
           >
             Next ›
           </button>
@@ -336,24 +336,35 @@ function PhotoRow({
         <button
           onClick={() => setDraftTags(photo.tags ?? [])}
           disabled={!draftDiverged}
-          className="text-muted disabled:opacity-40"
+          className="rounded-full bg-surface px-2.5 py-1 text-muted transition-colors hover:bg-border disabled:opacity-40"
         >
           Reset
         </button>
         <button
           onClick={() => onSaveTags(draftTags)}
           disabled={!draftDiverged}
-          className="text-accent disabled:opacity-40"
+          className="rounded-full bg-accent px-2.5 py-1 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           Save
         </button>
-        <button onClick={onDuplicate} disabled={!destinationFolderId} className="disabled:opacity-40">
+        <button
+          onClick={onDuplicate}
+          disabled={!destinationFolderId}
+          className="rounded-full bg-surface px-2.5 py-1 transition-colors hover:bg-border disabled:opacity-40"
+        >
           Duplicate
         </button>
-        <button onClick={onMove} disabled={!destinationFolderId} className="disabled:opacity-40">
+        <button
+          onClick={onMove}
+          disabled={!destinationFolderId}
+          className="rounded-full bg-surface px-2.5 py-1 transition-colors hover:bg-border disabled:opacity-40"
+        >
           Move
         </button>
-        <button onClick={onDelete} className="text-red-500">
+        <button
+          onClick={onDelete}
+          className="rounded-full bg-red-500 px-2.5 py-1 text-white transition-opacity hover:opacity-90"
+        >
           Delete
         </button>
       </div>

@@ -95,7 +95,7 @@ export default function MaintenancePage() {
           {dimensionsRunning && (
             <button
               onClick={() => (stopRequested.current = true)}
-              className="text-xs uppercase tracking-wide text-muted hover:text-foreground"
+              className="rounded-full border border-border px-3 py-1.5 text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface hover:text-foreground"
             >
               Stop after this batch
             </button>
