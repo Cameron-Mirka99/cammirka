@@ -478,6 +478,11 @@ tagAssignmentsTable.grantReadWriteData(backend.retentionSweep.resources.lambda);
 // permissions when the local app later uses them -- this role needs real
 // s3:PutObject even though presignBulkUpload itself never calls PutObject.
 photoBucket.grantWrite(backend.presignBulkUpload.resources.lambda);
+// Also needs read: resolveAvailableFileName() calls HeadObjectCommand to
+// check for filename collisions before presigning. Without this, that HEAD
+// call gets denied and the SDK can't parse a body-less HEAD error response,
+// so it surfaces as a generic "UnknownError" instead of an access-denied one.
+photoBucket.grantRead(backend.presignBulkUpload.resources.lambda);
 foldersTable.grantReadData(backend.presignBulkUpload.resources.lambda);
 photoBucket.grantReadWrite(backend.processBulkUpload.resources.lambda);
 photoMetadataTable.grantReadWriteData(backend.processBulkUpload.resources.lambda);
