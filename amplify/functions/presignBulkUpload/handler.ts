@@ -104,10 +104,16 @@ async function presignOne(folderId: string, file: RequestedFile) {
       { expiresIn: URL_EXPIRY_SECONDS },
     );
 
-    // The PUT signature covers these headers -- the caller must send them
-    // verbatim or S3 will reject the upload with SignatureDoesNotMatch.
+    // Content-Type must be sent verbatim or S3 rejects the upload. The
+    // metadata (x-amz-meta-*), by contrast, must NOT also be sent as a
+    // header: getSignedUrl's query-string presigning already hoists it
+    // into the URL's own query parameters (X-Amz-SignedHeaders only
+    // covers "host"), so S3 applies it from there automatically. Sending
+    // it again as a real header gets the whole PUT rejected with
+    // AccessDenied / "headers present in the request which were not
+    // signed" -- the duplicate isn't in SignedHeaders, even though its
+    // value matches what's already signed into the query string.
     const headers: Record<string, string> = { "Content-Type": contentType };
-    if (metadata) headers["x-amz-meta-taken-at"] = metadata["taken-at"];
 
     return { fileName: originalFileName, finalFileName, key, uploadUrl, headers, ok: true as const };
   } catch (error) {
