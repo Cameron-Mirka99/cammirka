@@ -48,6 +48,8 @@ import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js
 const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3001",
+  "https://www.cmirka.com",
+  "https://cmirka.com",
 ];
 
 const backend = defineBackend({
