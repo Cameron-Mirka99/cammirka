@@ -1,72 +1,85 @@
-# Getting Started with Create React App
+# Cammirka
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Cameron Mirka's wildlife photography site. Next.js frontend + AWS Amplify
+Gen 2 backend (Cognito + API Gateway + Lambda + DynamoDB + S3/CloudFront) in
+one repo.
 
-## Available Scripts
+This frontend is a from-scratch rebuild (previously a CRA + MUI app) — same
+backend, same capabilities, new UI. The backend under `amplify/` was not
+changed as part of that rebuild.
 
-In the project directory, you can run:
+## Setup
 
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-## Local development setup
-
-1) Install dependencies:
-```bash
-npm install
-```
-
-2) Provide your API base URL:
 ```bash
 cp .env.local.example .env.local
-```
-Edit `.env.local` and set:
-```
-REACT_APP_PHOTO_API_URL=https://<your-api-id>.execute-api.us-east-1.amazonaws.com/prod
+npm install
+npm run dev
 ```
 
-3) Generate Amplify outputs (required for auth):
-```bash
-npx ampx sandbox --outputs-out-dir src --outputs-format json
+Fill in `.env.local` with the backend config values. These are public
+config (already shipped to every browser), not secrets:
+
+| Variable | Where to find it |
+|---|---|
+| `NEXT_PUBLIC_PHOTO_API_URL` | `custom.photoApi.url` |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | `auth.user_pool_id` |
+| `NEXT_PUBLIC_COGNITO_CLIENT_ID` | `auth.user_pool_client_id` |
+| `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID` | `auth.identity_pool_id` |
+| `NEXT_PUBLIC_AWS_REGION` | `auth.aws_region` |
+| `NEXT_PUBLIC_CLOUDFRONT_DOMAIN` | `custom.cloudfront.domain` |
+
+all from a generated `src/amplify_outputs.json` — produced by running a
+backend sandbox or deploy (see `NEXT_STEPS.md` section 9), or copied from
+whichever environment's config you're pointing the frontend at.
+
+Open [http://localhost:3000](http://localhost:3000). The app talks directly
+to the real, already-deployed AWS backend — there is no local/mock backend.
+Admin actions (delete folder/photo, remove user, etc.) are real and
+irreversible against that backend, so test them against a disposable
+folder/photo first.
+
+## Scripts
+
+- `npm run dev` — local dev server (Turbopack)
+- `npm run build` / `npm run start` — production build/serve
+- `npm run lint` — ESLint
+- `npm run test` — Vitest (once), `npm run test:watch` for watch mode
+- `npx tsc --noEmit` — type-check
+
+## Structure
+
+```
+amplify/            Backend: Cognito, API Gateway, Lambda functions, infra (CDK)
+src/
+  app/
+    (public)/       Home, Archive, About — no auth
+    (auth)/login/   Custom sign-in/sign-up/confirm + invite redemption
+    (private)/      Account, My Photos — behind RequireAuth
+    (admin)/admin/  Admin console, split by section — behind RequireAdmin
+  lib/
+    api/            Typed client functions for every backend route
+    query/          TanStack Query hooks (data + mutations, optimistic updates)
+    auth/           Cognito auth context, route guards, invite-code flow
+  components/       Shared UI (gallery grid, lightbox, tag input)
 ```
 
-4) Run the app:
-```bash
-npm start
-```
+## Known intentional differences from the pre-rebuild frontend
+
+- No Amplify `<Authenticator>` widget — fully custom auth forms.
+- No nanogallery2/jQuery, and the old app's dead `pages/home/*` /
+  `pages/about/*Section.tsx` component trees were not ported (confirmed
+  unused before removal).
+- Batch tag edits in the admin photo library commit each photo to the
+  backend sequentially and stop on the first failure, but do **not** revert
+  already-succeeded photos in that batch back to their old tags in the UI —
+  the backend already committed those, so reverting the UI would just make
+  it lie about server state.
+
+## Known follow-up needed before deploying this branch
+
+`amplify.yml`'s frontend build phase (`npm run build`, publishing a
+`build/` directory) still assumes the old CRA output. Next.js's build
+output and Amplify Hosting's SSR deployment artifacts work differently —
+this needs to be updated and verified against an actual Amplify Hosting
+build before this branch is deployed. Not changed here since it couldn't
+be verified without a real deploy.
