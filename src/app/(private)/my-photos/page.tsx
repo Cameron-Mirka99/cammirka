@@ -29,6 +29,16 @@ export default function MyPhotosPage() {
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [tab, setTab] = useState<Tab>("bulk");
   const [likedOnly, setLikedOnly] = useState(false);
+  const [likeNotice, setLikeNotice] = useState<{ message: string; variant: "limit" | "error" } | null>(
+    null
+  );
+  const likeNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showLikeNotice = (message: string, variant: "limit" | "error") => {
+    if (likeNoticeTimer.current) clearTimeout(likeNoticeTimer.current);
+    setLikeNotice({ message, variant });
+    likeNoticeTimer.current = setTimeout(() => setLikeNotice(null), 5000);
+  };
 
   // Load the folder list once: full list for admins, own folders otherwise.
   useEffect(() => {
@@ -102,6 +112,12 @@ export default function MyPhotosPage() {
     return () => controller.abort();
   }, [selectedFolderId]);
 
+  useEffect(() => {
+    return () => {
+      if (likeNoticeTimer.current) clearTimeout(likeNoticeTimer.current);
+    };
+  }, []);
+
   const bulkPhotos = useMemo(() => photos.filter((p) => p.category === "bulk"), [photos]);
   const finalPhotos = useMemo(() => photos.filter((p) => p.category !== "bulk"), [photos]);
   const visibleBulkPhotos = useMemo(
@@ -143,9 +159,16 @@ export default function MyPhotosPage() {
     } catch (error) {
       setPhotos(previousPhotos);
       setFolders(previousFolders);
-      const message =
-        error instanceof ApiError ? error.message : "Could not update like.";
-      window.alert(message);
+      if (error instanceof ApiError && error.status === 409) {
+        showLikeNotice(
+          "Like limit reached — unlike one to pick another.",
+          "limit"
+        );
+      } else {
+        const message =
+          error instanceof ApiError ? error.message : "Could not update like.";
+        showLikeNotice(message, "error");
+      }
     }
   };
 
@@ -158,6 +181,29 @@ export default function MyPhotosPage() {
       <header className="mb-8">
         <h1 className="font-serif text-3xl italic">{heading}</h1>
       </header>
+
+      {likeNotice && (
+        <div
+          role="alert"
+          className={clsx(
+            // z-[110]: above the lightbox (z-[100]) -- liking happens from
+            // inside the maximized view too, so the notice must be visible there.
+            "fixed left-1/2 top-20 z-[110] flex w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg",
+            likeNotice.variant === "limit"
+              ? "border-accent bg-background text-foreground"
+              : "border-red-500 bg-background text-red-500"
+          )}
+        >
+          <span>{likeNotice.message}</span>
+          <button
+            onClick={() => setLikeNotice(null)}
+            aria-label="Dismiss"
+            className="shrink-0 text-lg leading-none opacity-70 hover:opacity-100"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {folders && folders.length === 0 && (
         <p className="text-sm text-muted">
