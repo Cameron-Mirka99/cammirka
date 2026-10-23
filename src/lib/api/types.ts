@@ -5,6 +5,9 @@ export type Photo = {
   thumbnailUrl?: string;
   title?: string;
   tags?: string[];
+  width?: number;
+  height?: number;
+  lastModified?: string;
 };
 
 export type PhotoListMeta = {

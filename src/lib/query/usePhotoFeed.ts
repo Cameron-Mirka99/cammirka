@@ -13,13 +13,22 @@ type FeedFetcher = (params: {
  * The backend returns a *shuffled sample*, not a stable page — "load more"
  * works by growing an excludeKeys list, not a cursor. hasMore is inferred
  * from whether a full page came back (per the old app's behavior).
+ *
+ * `seedExcludeKeys` lets a caller keep photos shown elsewhere on the page
+ * (e.g. a "Newest" strip) out of this feed, without them counting toward
+ * this feed's own excludeKeys bookkeeping.
  */
-export function usePhotoFeed(fetcher: FeedFetcher, tag?: string) {
+export function usePhotoFeed(
+  fetcher: FeedFetcher,
+  tag?: string,
+  seedExcludeKeys: string[] = []
+) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const requestSeq = useRef(0);
+  const seedKey = seedExcludeKeys.join(",");
 
   useEffect(() => {
     const seq = ++requestSeq.current;
@@ -27,7 +36,7 @@ export function usePhotoFeed(fetcher: FeedFetcher, tag?: string) {
     setPhotos([]);
     setHasMore(false);
 
-    fetcher({ excludeKeys: [], limit: PAGE_SIZE, tag })
+    fetcher({ excludeKeys: seedExcludeKeys, limit: PAGE_SIZE, tag })
       .then((res) => {
         if (seq !== requestSeq.current) return;
         setPhotos(res.photos);
@@ -41,13 +50,15 @@ export function usePhotoFeed(fetcher: FeedFetcher, tag?: string) {
       .finally(() => {
         if (seq === requestSeq.current) setLoading(false);
       });
-  }, [fetcher, tag]);
+    // seedKey stands in for seedExcludeKeys so a new-but-equal array doesn't refire this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher, tag, seedKey]);
 
   const loadMore = useCallback(() => {
     const seq = requestSeq.current;
     setLoadingMore(true);
     fetcher({
-      excludeKeys: photos.map((p) => p.key),
+      excludeKeys: [...seedExcludeKeys, ...photos.map((p) => p.key)],
       limit: PAGE_SIZE,
       tag,
     })
@@ -62,7 +73,8 @@ export function usePhotoFeed(fetcher: FeedFetcher, tag?: string) {
       })
       .catch(() => setHasMore(false))
       .finally(() => setLoadingMore(false));
-  }, [fetcher, photos, tag]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher, photos, tag, seedKey]);
 
   return { photos, loading, loadingMore, hasMore, loadMore };
 }

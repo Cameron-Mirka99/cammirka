@@ -1,13 +1,17 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { fetchPublicPhotos } from "@/lib/api/photos";
 import { usePhotoFeed } from "@/lib/query/usePhotoFeed";
 import { useSecondaryTags } from "@/lib/query/useTags";
 import { PhotoGrid } from "@/components/gallery/PhotoGrid";
 import { MoreTagsMenu } from "@/components/ui/MoreTagsMenu";
+import { Lightbox } from "@/components/gallery/Lightbox";
+
+const NEWEST_COUNT = 8;
 
 export default function ArchivePage() {
   return (
@@ -17,14 +21,28 @@ export default function ArchivePage() {
   );
 }
 
+function useNewestPhotos(tag?: string) {
+  return useQuery({
+    queryKey: ["archive-newest", tag ?? null],
+    queryFn: async () =>
+      (await fetchPublicPhotos({ limit: NEWEST_COUNT, sort: "newest", tag })).photos,
+    staleTime: 60_000,
+  });
+}
+
 function ArchiveContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tag = searchParams.get("tag") ?? undefined;
 
+  const { data: newestPhotos = [] } = useNewestPhotos(tag);
+  const newestKeys = newestPhotos.map((p) => p.key);
+  const [selectedNewestIndex, setSelectedNewestIndex] = useState<number | null>(null);
+
   const { photos, loading, loadingMore, hasMore, loadMore } = usePhotoFeed(
     fetchPublicPhotos,
-    tag
+    tag,
+    newestKeys
   );
   const { mainTags, secondaryTags } = useSecondaryTags();
 
@@ -57,6 +75,37 @@ function ArchiveContent() {
         ))}
         <MoreTagsMenu tags={secondaryTags} activeTag={tag} onSelect={applyTag} />
       </div>
+
+      {newestPhotos.length > 0 && (
+        <section className="mb-10">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
+            Newest
+          </h2>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {newestPhotos.map((photo, index) => (
+              <button
+                key={photo.key}
+                onClick={() => setSelectedNewestIndex(index)}
+                className="h-40 w-40 shrink-0 overflow-hidden rounded-sm bg-surface"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photo.thumbnailUrl ?? photo.url}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                />
+              </button>
+            ))}
+          </div>
+          <Lightbox
+            photos={newestPhotos}
+            selectedIndex={selectedNewestIndex}
+            setSelectedIndex={setSelectedNewestIndex}
+            showDownload={false}
+          />
+        </section>
+      )}
 
       {loading ? (
         <p className="py-24 text-center text-sm text-muted">

@@ -5,7 +5,7 @@ import {
   duplicatePhoto,
   deletePhoto,
 } from "@/lib/api/photos";
-import { updatePhotoTags } from "@/lib/api/tags";
+import { updatePhotoTags, updatePhotoTagsBatch } from "@/lib/api/tags";
 import type { Photo } from "@/lib/api/types";
 import { queryKeys } from "./keys";
 
@@ -91,6 +91,42 @@ export function useDuplicatePhotoMutation(folderId: string) {
       client.invalidateQueries({
         queryKey: queryKeys.adminFolderPhotos(vars.destinationFolderId),
       });
+    },
+  });
+}
+
+/**
+ * One network round-trip for the whole batch, so a failure rolls back the
+ * entire batch as one optimistic update — not N separate ones that can
+ * partially succeed and leave the UI showing a mix of old/new tags.
+ */
+export function useUpdatePhotoTagsBatchMutation(folderId: string) {
+  const { client, key, snapshot, rollback } = usePhotoListMutation(folderId);
+  return useMutation({
+    mutationFn: (updates: { photoKey: string; tags: string[] }[]) =>
+      updatePhotoTagsBatch(updates),
+    onMutate: async (updates) => {
+      await client.cancelQueries({ queryKey: key });
+      const previous = snapshot();
+      const nextTagsByKey = new Map(updates.map((u) => [u.photoKey, u.tags]));
+      client.setQueryData<Photo[]>(key, (prev) =>
+        prev?.map((p) =>
+          nextTagsByKey.has(p.key) ? { ...p, tags: nextTagsByKey.get(p.key) } : p
+        ) ?? []
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => rollback(ctx?.previous),
+    onSuccess: (data, _vars, ctx) => {
+      // Any per-item failure rolls back the whole batch, even though the
+      // request itself succeeded (HTTP-level) — the backend isn't
+      // transactional, so a partial failure is reported per item, not as
+      // a thrown error.
+      if (data.results.some((r) => !r.ok)) rollback(ctx?.previous);
+    },
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: key });
+      client.invalidateQueries({ queryKey: queryKeys.tagsPublic });
     },
   });
 }

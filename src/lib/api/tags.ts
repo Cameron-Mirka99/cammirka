@@ -34,3 +34,19 @@ export function updatePhotoTags(input: {
     body: JSON.stringify(input),
   });
 }
+
+export type BatchTagResult = {
+  photoKey: string;
+  tags: string[];
+  ok: boolean;
+  message?: string;
+};
+
+export function updatePhotoTagsBatch(
+  updates: { photoKey: string; tags: string[] }[]
+): Promise<{ results: BatchTagResult[] }> {
+  return authFetchJson("/photo-tags", {
+    method: "POST",
+    body: JSON.stringify({ updates }),
+  });
+}

@@ -5,6 +5,8 @@ type PhotoListParams = {
   excludeKeys?: string[];
   limit?: number;
   tag?: string;
+  /** Omit for the default shuffled sample; "newest" returns the most recent first. */
+  sort?: "newest";
 };
 
 export function fetchPublicPhotos(

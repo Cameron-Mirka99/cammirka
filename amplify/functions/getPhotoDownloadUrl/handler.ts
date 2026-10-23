@@ -3,6 +3,8 @@ import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 import { getManagedPhotoKeysFromStorageKey } from "../shared/photoPaths.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
@@ -16,33 +18,33 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!BUCKET_NAME || !FOLDER_USERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!claims) {
-      return response(401, { message: "Unauthorized." });
+      return jsonResponse(event, 401, { message: "Unauthorized." }, "POST,OPTIONS");
     }
 
     const body = parseBody(event);
     const storageKey = typeof body?.storageKey === "string" ? body.storageKey.trim() : "";
     if (!storageKey) {
-      return response(400, { message: "storageKey is required." });
+      return jsonResponse(event, 400, { message: "storageKey is required." }, "POST,OPTIONS");
     }
 
     const managedKeys = getManagedPhotoKeysFromStorageKey(storageKey);
     if (!managedKeys) {
-      return response(400, { message: "Invalid photo key." });
+      return jsonResponse(event, 400, { message: "Invalid photo key." }, "POST,OPTIONS");
     }
 
     const username = claims["cognito:username"] ?? claims.username ?? claims.sub;
     if (!isAdmin(claims)) {
       if (!username) {
-        return response(401, { message: "Unauthorized." });
+        return jsonResponse(event, 401, { message: "Unauthorized." }, "POST,OPTIONS");
       }
       const allowed = await isUserInFolder(username, managedKeys.folderId);
       if (!allowed) {
-        return response(403, { message: "Folder access not available." });
+        return jsonResponse(event, 403, { message: "Folder access not available." }, "POST,OPTIONS");
       }
     }
 
@@ -57,11 +59,11 @@ export const handler = async (
       { expiresIn: 120 },
     );
 
-    return response(200, { url, fileName });
+    return jsonResponse(event, 200, { url, fileName }, "POST,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to create download URL.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to create download URL.", error: message }, "POST,OPTIONS");
   }
 };
 
@@ -72,22 +74,6 @@ function parseBody(event: APIGatewayProxyEvent) {
   } catch {
     return null;
   }
-}
-
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims: Record<string, string>) {
-  const groups = claims["cognito:groups"];
-  return typeof groups === "string" && groups.includes("admin");
 }
 
 async function isUserInFolder(username: string, folderId: string) {
@@ -105,15 +91,3 @@ function sanitizeDownloadName(fileName: string) {
   return fileName.replace(/["\\]/g, "_");
 }
 
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

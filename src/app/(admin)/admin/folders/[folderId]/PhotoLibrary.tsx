@@ -9,6 +9,7 @@ import {
   useMovePhotoMutation,
   useDuplicatePhotoMutation,
   useUpdatePhotoTagsMutation,
+  useUpdatePhotoTagsBatchMutation,
 } from "@/lib/query/useAdminFolderPhotos";
 import { normalizeTags } from "@/lib/tagUtils";
 import { TagInput } from "@/components/ui/TagInput";
@@ -27,6 +28,7 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
   const movePhoto = useMovePhotoMutation(folderId);
   const duplicatePhoto = useDuplicatePhotoMutation(folderId);
   const updateTags = useUpdatePhotoTagsMutation(folderId);
+  const updateTagsBatch = useUpdatePhotoTagsBatchMutation(folderId);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -83,9 +85,9 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
   }, [selectedPhotos, batchAdd, batchRemove]);
 
   const applyBatchTags = async () => {
-    for (const { photo, next } of batchPreview) {
-      await updateTags.mutateAsync({ photoKey: photo.key, tags: next });
-    }
+    await updateTagsBatch.mutateAsync(
+      batchPreview.map(({ photo, next }) => ({ photoKey: photo.key, tags: next }))
+    );
     setBatchAdd([]);
     setBatchRemove([]);
   };
@@ -174,7 +176,7 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
           </div>
           <button
             onClick={applyBatchTags}
-            disabled={batchPreview.length === 0 || updateTags.isPending}
+            disabled={batchPreview.length === 0 || updateTagsBatch.isPending}
             className="mt-3 rounded-full bg-accent px-5 py-1.5 text-sm text-white disabled:opacity-50"
           >
             Apply to {batchPreview.length} photo{batchPreview.length === 1 ? "" : "s"}

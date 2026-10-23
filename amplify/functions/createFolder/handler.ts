@@ -1,6 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
 
@@ -11,18 +13,18 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!FOLDERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
     const body = parseBody(event);
     const folderId = sanitizeFolderId(body?.folderId);
     if (!folderId) {
-      return response(400, { message: "folderId is required." });
+      return jsonResponse(event, 400, { message: "folderId is required." }, "POST,OPTIONS");
     }
 
     const displayName = body?.displayName?.trim() || folderId;
@@ -43,14 +45,14 @@ export const handler = async (
       }),
     );
 
-    return response(201, { folderId, displayName });
+    return jsonResponse(event, 201, { folderId, displayName }, "POST,OPTIONS");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (message.includes("ConditionalCheckFailed")) {
-      return response(409, { message: "Folder already exists." });
+      return jsonResponse(event, 409, { message: "Folder already exists." }, "POST,OPTIONS");
     }
     console.error(error);
-    return response(500, { message: "Failed to create folder.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to create folder.", error: message }, "POST,OPTIONS");
   }
 };
 
@@ -71,32 +73,3 @@ function sanitizeFolderId(value?: string) {
   return trimmed;
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

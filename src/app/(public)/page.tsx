@@ -10,17 +10,23 @@ import type { TagRecord } from "@/lib/api/types";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
- * Hero photo is a deliberately curated shot, not a random pick: tag a photo
- * "featured" in the admin to control it. Falls back to an arbitrary photo
- * if nothing is tagged yet, so the page never breaks.
+ * Hero photo comes from a small, deliberately curated set, not every photo:
+ * tag a handful of best shots "featured" in the admin (then hide that tag
+ * from the subject-tile strip via Admin > Home Tags). One is picked at
+ * random per load, so repeat visits see variety without the hero being
+ * literally every photo. Falls back to an arbitrary photo if nothing is
+ * tagged yet, so the page never breaks.
  */
 function useHeroPhoto() {
   return useQuery({
     queryKey: ["hero-photo"],
     queryFn: async () => {
       try {
-        const featured = await fetchPublicPhotos({ tag: "featured", limit: 1 });
-        if (featured.photos[0]) return featured.photos[0];
+        const featured = await fetchPublicPhotos({ tag: "featured", limit: 10 });
+        if (featured.photos.length > 0) {
+          const index = Math.floor(Math.random() * featured.photos.length);
+          return featured.photos[index];
+        }
       } catch {
         // fall through to the arbitrary pick below
       }

@@ -42,6 +42,13 @@ import { updateTagCatalog } from "./functions/updateTagCatalog/resource.js";
 import { updateUser } from "./functions/updateUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
 
+// Origins allowed to read API responses (see shared/response.ts). Update
+// with the deployed frontend's real origin once it's live.
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+];
+
 const backend = defineBackend({
   auth,
   acceptInvite,
@@ -71,6 +78,35 @@ const backend = defineBackend({
 
 const apiStack = backend.createStack("PhotoApiStack");
 const infraStack = backend.createStack("PhotoInfraStack");
+
+const allFunctions = [
+  backend.acceptInvite,
+  backend.addFolderUser,
+  backend.backfillFolderUsers,
+  backend.createFolder,
+  backend.createInvite,
+  backend.deleteFolder,
+  backend.deletePhoto,
+  backend.duplicatePhoto,
+  backend.getPhotoDownloadUrl,
+  backend.getPhotoList,
+  backend.listAllUsers,
+  backend.listUserFolders,
+  backend.listFolders,
+  backend.listFolderUsers,
+  backend.listTags,
+  backend.movePhoto,
+  backend.publicPhotos,
+  backend.removeFolderUser,
+  backend.unbanFolderUser,
+  backend.updatePhotoTags,
+  backend.updateTagCatalog,
+  backend.updateUser,
+  backend.uploadImageFunction,
+];
+for (const fn of allFunctions) {
+  fn.addEnvironment("ALLOWED_ORIGINS", ALLOWED_ORIGINS.join(","));
+}
 
 const foldersTable = new Table(infraStack, "FoldersTable", {
   partitionKey: { name: "folderId", type: AttributeType.STRING },
@@ -254,6 +290,26 @@ backend.deleteFolder.addEnvironment(
   "BUCKET_NAME",
   photoBucket.bucketName,
 );
+backend.deleteFolder.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
+backend.deleteFolder.addEnvironment(
+  "BANNED_USERS_TABLE_NAME",
+  bannedFolderUsersTable.tableName,
+);
+backend.deleteFolder.addEnvironment(
+  "INVITES_TABLE_NAME",
+  invitesTable.tableName,
+);
+backend.deleteFolder.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
+backend.deleteFolder.addEnvironment(
+  "TAG_ASSIGNMENTS_TABLE_NAME",
+  tagAssignmentsTable.tableName,
+);
 backend.acceptInvite.addEnvironment(
   "INVITES_TABLE_NAME",
   invitesTable.tableName,
@@ -332,6 +388,11 @@ foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
 foldersTable.grantReadData(backend.uploadImageFunction.resources.lambda);
 foldersTable.grantReadData(backend.listFolders.resources.lambda);
 foldersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+folderUsersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+bannedFolderUsersTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+invitesTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
 photoMetadataTable.grantReadWriteData(backend.uploadImageFunction.resources.lambda);
 photoMetadataTable.grantReadData(backend.getPhotoList.resources.lambda);
 photoMetadataTable.grantReadData(backend.publicPhotos.resources.lambda);
@@ -410,7 +471,7 @@ backend.updateUser.resources.lambda.addToRolePolicy(
 const restApi = new RestApi(apiStack, "PhotoApi", {
   restApiName: "photo-site-api",
   defaultCorsPreflightOptions: {
-    allowOrigins: Cors.ALL_ORIGINS,
+    allowOrigins: ALLOWED_ORIGINS,
     allowMethods: Cors.ALL_METHODS,
   },
 });

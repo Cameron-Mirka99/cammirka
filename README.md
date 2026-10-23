@@ -69,17 +69,52 @@ src/
 - No nanogallery2/jQuery, and the old app's dead `pages/home/*` /
   `pages/about/*Section.tsx` component trees were not ported (confirmed
   unused before removal).
-- Batch tag edits in the admin photo library commit each photo to the
-  backend sequentially and stop on the first failure, but do **not** revert
-  already-succeeded photos in that batch back to their old tags in the UI —
-  the backend already committed those, so reverting the UI would just make
-  it lie about server state.
+## Backend fixes (this round)
+
+A batch of backend issues found while building this frontend were fixed
+directly in `amplify/`:
+
+- `deleteFolder` now cascades: cleans up `FolderUsersTable`,
+  `BannedFolderUsersTable`, the folder's `InvitesTable` row, and every
+  photo's tag rows, instead of leaving them orphaned.
+- Real server-side thumbnail resizing via `sharp` in `uploadImageFunction`
+  (was a no-op stub before — all downscaling happened client-side only).
+  Also captures real photo width/height at upload time.
+- Invites can be rotated (`InvitePanel` → "Rotate") — generates a new code
+  and immediately invalidates the old one, instead of one code living
+  forever.
+- `listFolders` now paginates properly instead of silently truncating past
+  one DynamoDB Scan page.
+- The admin-group check is exact group membership now, not a substring
+  match on the raw claims string (a group literally named e.g.
+  `"not-admin"` would previously have passed).
+- CORS is scoped to an explicit `ALLOWED_ORIGINS` allowlist (see
+  `amplify/backend.ts`) instead of `*`. **Add the deployed frontend's real
+  origin to that list before deploying** — it currently only allows
+  `localhost:3000`/`:3001` for local dev.
+- `/photo-tags` accepts a batch body (`{ updates: [...] }`) alongside the
+  original single-photo shape, so the admin photo library's batch tag tray
+  does one request instead of N, and a partial failure now rolls back the
+  whole batch in the UI (previously documented here as a known gap — fixed).
+- `/public-photos` and `/photos` accept `sort: "newest"` to return the most
+  recently added photos instead of the default shuffled sample — used by
+  Archive's "Newest" strip.
+
+**Featured-photo convention**: tag a handful of best shots `"featured"` in
+the admin photo library, then toggle that tag's visibility off in
+Admin → Home Tags so it doesn't *also* show up as a subject tile. The home
+page picks one at random from that set on each load.
 
 ## Known follow-up needed before deploying this branch
 
-`amplify.yml`'s frontend build phase (`npm run build`, publishing a
-`build/` directory) still assumes the old CRA output. Next.js's build
-output and Amplify Hosting's SSR deployment artifacts work differently —
-this needs to be updated and verified against an actual Amplify Hosting
-build before this branch is deployed. Not changed here since it couldn't
-be verified without a real deploy.
+- `amplify.yml`'s frontend build phase (`npm run build`, publishing a
+  `build/` directory) still assumes the old CRA output. Next.js's build
+  output and Amplify Hosting's SSR deployment artifacts work differently —
+  this needs to be updated and verified against an actual Amplify Hosting
+  build before this branch is deployed. Not changed here since it couldn't
+  be verified without a real deploy.
+- `ALLOWED_ORIGINS` in `amplify/backend.ts` needs the production frontend
+  origin added once it's deployed (see above).
+- All backend changes above were written against the handler code but
+  **not yet deployed/verified against a sandbox** (`npx ampx sandbox`) —
+  do that before trusting them against production data.

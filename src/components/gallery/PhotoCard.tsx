@@ -15,13 +15,20 @@ export function PhotoCard({ photo, onOpen }: PhotoCardProps) {
   const previewUrl = photo.thumbnailUrl ?? photo.url;
   const [loaded, setLoaded] = useState(false);
 
+  // Photos uploaded after the width/height backend change know their real
+  // ratio up front — no guess, no reflow once loaded. Older photos without
+  // stored dimensions fall back to a guessed placeholder that's cleared
+  // once the real image loads (the old behavior, still has a small reflow).
+  const knownRatio =
+    photo.width && photo.height ? `${photo.width} / ${photo.height}` : undefined;
+  const placeholderRatio = knownRatio ?? "4 / 5";
+  const aspectRatio = knownRatio ?? (!loaded ? placeholderRatio : undefined);
+
   return (
     <button
       onClick={onOpen}
       className="group relative mb-4 block w-full overflow-hidden rounded-sm bg-surface"
-      // Reserve space before the image's real dimensions are known, so the
-      // grid doesn't jump from collapsed to full size once it loads.
-      style={!loaded ? { aspectRatio: "4 / 5" } : undefined}
+      style={aspectRatio ? { aspectRatio } : undefined}
     >
       {!loaded && <Skeleton className="absolute inset-0" />}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -33,7 +40,7 @@ export function PhotoCard({ photo, onOpen }: PhotoCardProps) {
         onLoad={() => setLoaded(true)}
         className={`w-full object-cover transition-opacity duration-500 ease-out group-hover:scale-[1.02] ${
           loaded ? "opacity-100" : "absolute inset-0 h-full opacity-0"
-        }`}
+        } ${knownRatio ? "h-full" : ""}`}
       />
     </button>
   );
