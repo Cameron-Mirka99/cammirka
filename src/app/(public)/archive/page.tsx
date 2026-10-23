@@ -4,12 +4,15 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
+import type { Photo } from "@/lib/api/types";
 import { fetchPublicPhotos } from "@/lib/api/photos";
 import { usePhotoFeed } from "@/lib/query/usePhotoFeed";
 import { useSecondaryTags } from "@/lib/query/useTags";
 import { PhotoGrid } from "@/components/gallery/PhotoGrid";
 import { MoreTagsMenu } from "@/components/ui/MoreTagsMenu";
 import { Lightbox } from "@/components/gallery/Lightbox";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { getPhotoTitle } from "@/lib/photoTitle";
 
 const NEWEST_COUNT = 8;
 
@@ -54,7 +57,7 @@ function ArchiveContent() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-24 pt-28 sm:px-8">
+    <div className="mx-auto max-w-6xl px-5 pb-24 pt-28 sm:px-8 xl:max-w-none xl:w-[clamp(1152px,82vw,2560px)]">
       <header className="mb-8">
         <h1 className="font-serif text-3xl italic">Archive</h1>
         <p className="mt-2 text-sm text-muted">
@@ -77,25 +80,17 @@ function ArchiveContent() {
       </div>
 
       {newestPhotos.length > 0 && (
-        <section className="mb-10">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
+        <section className="mb-14">
+          <h2 className="mb-4 font-serif text-xl italic text-foreground">
             Newest
           </h2>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="flex gap-4 overflow-x-auto pb-2">
             {newestPhotos.map((photo, index) => (
-              <button
+              <NewestCard
                 key={photo.key}
-                onClick={() => setSelectedNewestIndex(index)}
-                className="h-40 w-40 shrink-0 overflow-hidden rounded-sm bg-surface"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.thumbnailUrl ?? photo.url}
-                  alt=""
-                  loading="lazy"
-                  className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-                />
-              </button>
+                photo={photo}
+                onOpen={() => setSelectedNewestIndex(index)}
+              />
             ))}
           </div>
           <Lightbox
@@ -132,6 +127,39 @@ function ArchiveContent() {
         </p>
       )}
     </div>
+  );
+}
+
+function NewestCard({
+  photo,
+  onOpen,
+}: {
+  photo: Photo;
+  onOpen: () => void;
+}) {
+  const previewUrl = photo.thumbnailUrl ?? photo.url;
+  const [loaded, setLoaded] = useState(false);
+  const ratio = photo.width && photo.height ? photo.width / photo.height : 4 / 5;
+
+  return (
+    <button
+      onClick={onOpen}
+      className="group relative h-56 shrink-0 overflow-hidden rounded-sm bg-surface xl:h-64 2xl:h-72"
+      style={{ aspectRatio: ratio }}
+    >
+      {!loaded && <Skeleton className="absolute inset-0" />}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={previewUrl}
+        alt={getPhotoTitle(photo)}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        className={`h-full w-full object-cover transition-opacity duration-500 ease-out group-hover:scale-[1.02] ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+      />
+    </button>
   );
 }
 
