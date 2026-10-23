@@ -112,13 +112,12 @@ export default function MyPhotosPage() {
 
   // The Bulk tab only exists while the folder actually has bulk photos --
   // once they're all liked-and-replaced or swept, it disappears and Final
-  // becomes the only tab. Symmetrically, default back to Bulk whenever
-  // there's nothing to show on Final yet.
+  // becomes the only tab. This only forces Bulk -> Final, never the other
+  // way: the user can still freely click over to an empty Final tab (it
+  // shows its own empty state) without being bounced back to Bulk.
   useEffect(() => {
     if (tab === "bulk" && bulkPhotos.length === 0 && finalPhotos.length > 0) {
       setTab("final");
-    } else if (tab === "final" && finalPhotos.length === 0 && bulkPhotos.length > 0) {
-      setTab("bulk");
     }
   }, [tab, bulkPhotos.length, finalPhotos.length]);
 
@@ -216,7 +215,11 @@ export default function MyPhotosPage() {
               emptyMessage="No liked photos yet."
             />
           ) : (
-            <PhotoGrid photos={finalPhotos} showDownload />
+            <PhotoGrid
+              photos={finalPhotos}
+              showDownload
+              emptyMessage="No final photos yet."
+            />
           )}
         </>
       )}
