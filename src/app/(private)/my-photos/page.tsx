@@ -131,11 +131,19 @@ export default function MyPhotosPage() {
   // becomes the only tab. This only forces Bulk -> Final, never the other
   // way: the user can still freely click over to an empty Final tab (it
   // shows its own empty state) without being bounced back to Bulk.
+  //
+  // Gated on !loadingPhotos: while a folder switch's fetch is in flight,
+  // bulkPhotos/finalPhotos still reflect the PREVIOUS folder for a moment
+  // (tab already reset to "bulk", but photos hasn't updated yet). Without
+  // this guard, this effect could flip to "final" based on stale data
+  // before the new folder's real photos ever arrive, and then never
+  // recover since there's no reverse auto-switch.
   useEffect(() => {
+    if (loadingPhotos) return;
     if (tab === "bulk" && bulkPhotos.length === 0 && finalPhotos.length > 0) {
       setTab("final");
     }
-  }, [tab, bulkPhotos.length, finalPhotos.length]);
+  }, [loadingPhotos, tab, bulkPhotos.length, finalPhotos.length]);
 
   const handleToggleLike = async (photo: Photo) => {
     if (!selectedFolderId) return;
