@@ -9,12 +9,14 @@ type PhotoGridProps = {
   photos: Photo[];
   showDownload?: boolean;
   emptyMessage?: string;
+  onToggleLike?: (photo: Photo) => void;
 };
 
 export function PhotoGrid({
   photos,
   showDownload = false,
   emptyMessage = "No photos found.",
+  onToggleLike,
 }: PhotoGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -32,6 +34,7 @@ export function PhotoGrid({
             key={photo.key}
             photo={photo}
             onOpen={() => setSelectedIndex(index)}
+            onToggleLike={onToggleLike ? () => onToggleLike(photo) : undefined}
           />
         ))}
       </div>
@@ -40,6 +43,7 @@ export function PhotoGrid({
         selectedIndex={selectedIndex}
         setSelectedIndex={setSelectedIndex}
         showDownload={showDownload}
+        onToggleLike={onToggleLike}
       />
     </>
   );

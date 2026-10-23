@@ -9,9 +9,10 @@ type PhotoCardProps = {
   photo: Photo;
   onOpen: () => void;
   priority?: boolean;
+  onToggleLike?: () => void;
 };
 
-export function PhotoCard({ photo, onOpen }: PhotoCardProps) {
+export function PhotoCard({ photo, onOpen, onToggleLike }: PhotoCardProps) {
   const previewUrl = photo.thumbnailUrl ?? photo.url;
   const [loaded, setLoaded] = useState(false);
 
@@ -42,6 +43,30 @@ export function PhotoCard({ photo, onOpen }: PhotoCardProps) {
           loaded ? "opacity-100" : "absolute inset-0 h-full opacity-0"
         } ${knownRatio ? "h-full" : ""}`}
       />
+      {onToggleLike && photo.category === "bulk" && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={photo.liked ? "Unlike" : "Like"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleLike();
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleLike();
+          }}
+          className={`absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full text-lg transition-colors ${
+            photo.liked
+              ? "bg-accent text-white"
+              : "bg-black/40 text-white hover:bg-black/60"
+          }`}
+        >
+          {photo.liked ? "♥" : "♡"}
+        </span>
+      )}
     </button>
   );
 }

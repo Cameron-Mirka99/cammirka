@@ -32,6 +32,9 @@ export const handler = async (
     const createdBy =
       claims?.["cognito:username"] ?? claims?.username ?? "unknown";
 
+    const likeLimit = positiveInteger(body?.likeLimit);
+    const bulkRetentionDays = positiveInteger(body?.bulkRetentionDays);
+
     await ddb.send(
       new PutCommand({
         TableName: FOLDERS_TABLE_NAME,
@@ -40,6 +43,11 @@ export const handler = async (
           displayName,
           createdAt,
           createdBy,
+          // bulkRetentionDays is intentionally settable only here, at
+          // creation -- updateFolder rejects it outright so the retention
+          // clock a bulk photo is already aging against can never shift.
+          ...(likeLimit !== undefined ? { likeLimit } : {}),
+          ...(bulkRetentionDays !== undefined ? { bulkRetentionDays } : {}),
         },
         ConditionExpression: "attribute_not_exists(folderId)",
       }),
@@ -63,6 +71,13 @@ function parseBody(event: APIGatewayProxyEvent) {
   } catch {
     return null;
   }
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    return undefined;
+  }
+  return value;
 }
 
 function sanitizeFolderId(value?: string) {

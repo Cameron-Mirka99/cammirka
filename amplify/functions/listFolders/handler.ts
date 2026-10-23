@@ -39,6 +39,9 @@ export const handler = async (
         displayName: item.displayName ?? item.folderId,
         createdAt: item.createdAt,
         createdBy: item.createdBy,
+        likeLimit: item.likeLimit,
+        likedCount: item.likedCount,
+        bulkRetentionDays: item.bulkRetentionDays,
       })),
     }, "GET,OPTIONS");
   } catch (error) {

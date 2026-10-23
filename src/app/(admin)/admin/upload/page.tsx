@@ -13,6 +13,7 @@ import {
 } from "@/lib/upload/buildUploadPayload";
 import { TagInput } from "@/components/ui/TagInput";
 import { queryKeys } from "@/lib/query/keys";
+import type { PhotoCategory } from "@/lib/api/types";
 
 type FileResult = { name: string; ok: boolean; message?: string };
 
@@ -22,6 +23,7 @@ export default function UploadPage() {
   const queryClient = useQueryClient();
 
   const [folderId, setFolderId] = useState("");
+  const [category, setCategory] = useState<PhotoCategory>("final");
   const [files, setFiles] = useState<File[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -50,7 +52,7 @@ export default function UploadPage() {
       const file = files[i];
       setProgress({ current: i + 1, total: files.length });
       try {
-        const payload = await buildUploadPayload(file, tags);
+        const payload = await buildUploadPayload(file, tags, category);
         const bytes = requestByteSize(payload, folderId);
         if (exceedsUploadLimit(bytes)) {
           outcomes.push({
@@ -105,6 +107,18 @@ export default function UploadPage() {
               {f.displayName ?? f.folderId}
             </option>
           ))}
+        </select>
+      </label>
+
+      <label className="block">
+        <span className="mb-1 block text-xs text-muted">Category</span>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as PhotoCategory)}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        >
+          <option value="final">Final (delivered product)</option>
+          <option value="bulk">Bulk (client review)</option>
         </select>
       </label>
 

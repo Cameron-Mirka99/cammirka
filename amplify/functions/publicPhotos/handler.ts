@@ -134,7 +134,7 @@ export const handler = async (
       ? new Set(await listPhotoKeysForTag(TAG_ASSIGNMENTS_TABLE_NAME, requestedTag))
       : null;
 
-    const eligiblePhotos = Array.from(candidates.values()).filter((photo) => {
+    const preliminaryPhotos = Array.from(candidates.values()).filter((photo) => {
       const primaryKey = photo.fullKey ?? photo.legacyKey;
       if (!primaryKey) {
         return false;
@@ -146,14 +146,24 @@ export const handler = async (
 
       return !excludeSet.has(photo.canonicalKey) && !excludeSet.has(primaryKey);
     });
+
+    // Unconditional, not opt-in: the public gallery must never surface a
+    // client's private bulk-review photos, even if one was ever accidentally
+    // uploaded under the "public" folder. Needs metadata for the full
+    // candidate set, before sampling, so a bulk photo can't win the random draw.
+    const fullMeta = await getPhotoMetadataMap(
+      PHOTO_METADATA_TABLE_NAME,
+      preliminaryPhotos.map((photo) => photo.canonicalKey),
+    );
+    const eligiblePhotos = preliminaryPhotos.filter(
+      (photo) => fullMeta.get(photo.canonicalKey)?.category !== "bulk",
+    );
+
     const selectedPhotos = sortNewest
       ? sortByNewest(eligiblePhotos).slice(0, limit)
       : samplePhotos(eligiblePhotos, limit);
     const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
-    const photoMeta = await getPhotoMetadataMap(
-      PHOTO_METADATA_TABLE_NAME,
-      selectedPhotos.map((photo) => photo.canonicalKey),
-    );
+    const photoMeta = fullMeta;
     const photos = selectedPhotos.map((photo) => {
       const storageKey = photo.fullKey ?? photo.legacyKey;
       const thumbnailKey = photo.thumbnailKey ?? photo.fullKey ?? photo.legacyKey;

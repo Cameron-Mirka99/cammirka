@@ -1,8 +1,9 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getClaims, isAdmin } from "../shared/auth.js";
+import { isFolderMember } from "../shared/folderAccess.js";
 import { jsonResponse } from "../shared/response.js";
 import {
   encodeS3Key,
@@ -13,6 +14,7 @@ import {
 import {
   getPhotoMetadataMap,
   listPhotoKeysForTag,
+  type PhotoCategory,
 } from "../shared/tagMetadata.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -30,6 +32,8 @@ type RequestBody = {
   limit?: number;
   tag?: string;
   sort?: string;
+  category?: string;
+  likedOnly?: boolean;
 };
 
 type ListedPhoto = {
@@ -63,6 +67,8 @@ export const handler = async (
     let requestedFolderId: string | undefined;
     let requestedTag: string | undefined;
     let sortNewest = false;
+    let requestedCategory: PhotoCategory | undefined;
+    let likedOnly = false;
 
     if (event?.body) {
       try {
@@ -81,6 +87,12 @@ export const handler = async (
         }
         if (body.sort === "newest") {
           sortNewest = true;
+        }
+        if (body.category === "bulk" || body.category === "final") {
+          requestedCategory = body.category;
+        }
+        if (body.likedOnly === true) {
+          likedOnly = true;
         }
       } catch {
         // ignore body parse errors
@@ -112,6 +124,12 @@ export const handler = async (
       if (query.sort === "newest") {
         sortNewest = true;
       }
+      if (query.category === "bulk" || query.category === "final") {
+        requestedCategory = query.category;
+      }
+      if (query.likedOnly === "true") {
+        likedOnly = true;
+      }
     }
 
     const username =
@@ -127,7 +145,7 @@ export const handler = async (
       if (!username) {
         return jsonResponse(event, 401, { message: "Unauthorized." }, "POST,GET,OPTIONS");
       }
-      const allowed = await isUserInFolder(username, requestedFolderId);
+      const allowed = await isFolderMember(ddb, FOLDER_USERS_TABLE_NAME, username, requestedFolderId);
       if (!allowed) {
         return jsonResponse(event, 403, { message: "Folder access not available." }, "POST,GET,OPTIONS");
       }
@@ -188,7 +206,7 @@ export const handler = async (
       ? new Set(await listPhotoKeysForTag(TAG_ASSIGNMENTS_TABLE_NAME, requestedTag))
       : null;
 
-    const eligiblePhotos = Array.from(candidates.values()).filter((photo) => {
+    let eligiblePhotos = Array.from(candidates.values()).filter((photo) => {
       const primaryKey = photo.fullKey ?? photo.legacyKey;
       if (!primaryKey) {
         return false;
@@ -200,18 +218,41 @@ export const handler = async (
 
       return !excludeSet.has(photo.canonicalKey) && !excludeSet.has(primaryKey);
     });
+
+    // category/likedOnly need metadata for the FULL candidate set before
+    // sampling/limiting, not just the post-sample set -- otherwise a random
+    // 200-item sample could filter down to near-nothing. Only pay this extra
+    // BatchGetItem cost when a caller actually asks for these filters.
+    const needsFullMetadata = Boolean(requestedCategory) || likedOnly;
+    let photoMeta: Awaited<ReturnType<typeof getPhotoMetadataMap>> | undefined;
+
+    if (needsFullMetadata) {
+      photoMeta = await getPhotoMetadataMap(
+        PHOTO_METADATA_TABLE_NAME,
+        eligiblePhotos.map((photo) => photo.canonicalKey),
+      );
+      eligiblePhotos = eligiblePhotos.filter((photo) => {
+        const meta = photoMeta!.get(photo.canonicalKey);
+        if (requestedCategory && meta?.category !== requestedCategory) return false;
+        if (likedOnly && !meta?.liked) return false;
+        return true;
+      });
+    }
+
     const selectedPhotos = sortNewest
       ? sortByNewest(eligiblePhotos).slice(0, limit)
       : samplePhotos(eligiblePhotos, limit);
     const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
-    const photoMeta = await getPhotoMetadataMap(
-      PHOTO_METADATA_TABLE_NAME,
-      selectedPhotos.map((photo) => photo.canonicalKey),
-    );
+    if (!needsFullMetadata) {
+      photoMeta = await getPhotoMetadataMap(
+        PHOTO_METADATA_TABLE_NAME,
+        selectedPhotos.map((photo) => photo.canonicalKey),
+      );
+    }
     const photos = selectedPhotos.map((photo) => {
       const storageKey = photo.fullKey ?? photo.legacyKey;
       const thumbnailKey = photo.thumbnailKey ?? photo.fullKey ?? photo.legacyKey;
-      const meta = photoMeta.get(photo.canonicalKey);
+      const meta = photoMeta!.get(photo.canonicalKey);
       return {
         key: photo.canonicalKey,
         storageKey,
@@ -220,6 +261,8 @@ export const handler = async (
         tags: meta?.tags ?? [],
         width: meta?.width,
         height: meta?.height,
+        category: meta?.category ?? "final",
+        liked: meta?.liked ?? false,
         lastModified: photo.lastModified?.toISOString(),
       };
     });
@@ -243,17 +286,6 @@ export const handler = async (
   }
 };
 
-
-async function isUserInFolder(username: string, folderId: string) {
-  const result = await ddb.send(
-    new GetCommand({
-      TableName: FOLDER_USERS_TABLE_NAME,
-      Key: { folderId, username },
-    }),
-  );
-
-  return Boolean(result.Item);
-}
 
 function samplePhotos<T>(items: T[], limit: number) {
   if (items.length <= limit) return items;

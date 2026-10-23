@@ -13,6 +13,7 @@ type LightboxProps = {
   selectedIndex: number | null;
   setSelectedIndex: (updater: (prev: number | null) => number | null) => void;
   showDownload?: boolean;
+  onToggleLike?: (photo: Photo) => void;
 };
 
 const MIN_ZOOM = 1;
@@ -24,6 +25,7 @@ export function Lightbox({
   selectedIndex,
   setSelectedIndex,
   showDownload = false,
+  onToggleLike,
 }: LightboxProps) {
   const open = selectedIndex !== null;
   const photo = selectedIndex !== null ? photos[selectedIndex] : null;
@@ -206,6 +208,18 @@ export function Lightbox({
                     <span className="text-xs uppercase tracking-wide text-white/50">
                       Frame {selectedIndex + 1} of {photos.length}
                     </span>
+                  )}
+                  {onToggleLike && photo.category === "bulk" && (
+                    <button
+                      onClick={() => onToggleLike(photo)}
+                      className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition-colors ${
+                        photo.liked
+                          ? "border-accent bg-accent text-white"
+                          : "border-white/30 text-white/90 hover:bg-white/10"
+                      }`}
+                    >
+                      {photo.liked ? "♥ Liked" : "♡ Like"}
+                    </button>
                   )}
                   {showDownload && (
                     <button

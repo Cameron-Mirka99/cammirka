@@ -1,14 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { fetchAllFolders, fetchUserFolders } from "@/lib/api/folders";
-import { fetchFolderPhotos } from "@/lib/api/photos";
+import { fetchFolderPhotos, toggleLike } from "@/lib/api/photos";
+import { ApiError } from "@/lib/api/client";
 import { PhotoGrid } from "@/components/gallery/PhotoGrid";
 import { FolderSelector } from "@/components/ui/FolderSelector";
 import type { Photo } from "@/lib/api/types";
 
-type FolderOption = { folderId: string; displayName?: string };
+type FolderOption = {
+  folderId: string;
+  displayName?: string;
+  likeLimit?: number;
+  likedCount?: number;
+};
+
+type Tab = "bulk" | "final";
 
 export default function MyPhotosPage() {
   const { user } = useAuth();
@@ -18,6 +27,8 @@ export default function MyPhotosPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [tab, setTab] = useState<Tab>("bulk");
+  const [likedOnly, setLikedOnly] = useState(false);
 
   // Load the folder list once: full list for admins, own folders otherwise.
   useEffect(() => {
@@ -48,6 +59,8 @@ export default function MyPhotosPage() {
   const activeFolderRef = useRef<string | null>(null);
 
   useEffect(() => {
+    setTab("bulk");
+    setLikedOnly(false);
     if (!selectedFolderId) {
       setPhotos([]);
       return;
@@ -57,8 +70,10 @@ export default function MyPhotosPage() {
     const controller = new AbortController();
     setLoadingPhotos(true);
 
+    // Sorted + a generous limit, not the default random sample -- clients
+    // need to see everything in the folder to decide what to like.
     fetchFolderPhotos(
-      { folderId: selectedFolderId, limit: 200 },
+      { folderId: selectedFolderId, sort: "newest", limit: 2000 },
       { signal: controller.signal }
     )
       .then((res) => {
@@ -87,6 +102,48 @@ export default function MyPhotosPage() {
     return () => controller.abort();
   }, [selectedFolderId]);
 
+  const bulkPhotos = photos.filter((p) => p.category === "bulk");
+  const finalPhotos = photos.filter((p) => p.category !== "bulk");
+  const visibleBulkPhotos = likedOnly ? bulkPhotos.filter((p) => p.liked) : bulkPhotos;
+  const selectedFolder = folders?.find((f) => f.folderId === selectedFolderId);
+
+  // The Bulk tab only exists while the folder actually has bulk photos --
+  // once they're all liked-and-replaced or swept, it disappears and Final
+  // becomes the only tab.
+  useEffect(() => {
+    if (tab === "bulk" && bulkPhotos.length === 0 && finalPhotos.length > 0) {
+      setTab("final");
+    }
+  }, [tab, bulkPhotos.length, finalPhotos.length]);
+
+  const handleToggleLike = async (photo: Photo) => {
+    if (!selectedFolderId) return;
+    const previousPhotos = photos;
+    const previousFolders = folders;
+    const delta = photo.liked ? -1 : 1;
+
+    setPhotos((prev) =>
+      prev.map((p) => (p.key === photo.key ? { ...p, liked: !p.liked } : p))
+    );
+    setFolders((prev) =>
+      prev?.map((f) =>
+        f.folderId === selectedFolderId
+          ? { ...f, likedCount: (f.likedCount ?? 0) + delta }
+          : f
+      ) ?? prev
+    );
+
+    try {
+      await toggleLike({ photoKey: photo.key, folderId: selectedFolderId });
+    } catch (error) {
+      setPhotos(previousPhotos);
+      setFolders(previousFolders);
+      const message =
+        error instanceof ApiError ? error.message : "Could not update like.";
+      window.alert(message);
+    }
+  };
+
   const heading = user?.givenName
     ? `${user.givenName} ${user.familyName ?? ""}'s Private Gallery`.trim()
     : "Private Gallery";
@@ -114,12 +171,75 @@ export default function MyPhotosPage() {
         </div>
       )}
 
-      {loadingPhotos ? (
+      {!loadingPhotos && folders && folders.length > 0 && (
+        <>
+          {bulkPhotos.length > 0 && (
+            <div className="mb-6 flex flex-wrap items-center gap-3">
+              <TabButton active={tab === "bulk"} label="Bulk" onClick={() => setTab("bulk")} />
+              <TabButton active={tab === "final"} label="Final" onClick={() => setTab("final")} />
+              {tab === "bulk" && (
+                <div className="ml-auto flex items-center gap-3 text-sm text-muted">
+                  {typeof selectedFolder?.likeLimit === "number" && (
+                    <span>
+                      {selectedFolder.likedCount ?? 0} of {selectedFolder.likeLimit} liked
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setLikedOnly((v) => !v)}
+                    className={clsx(
+                      "rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition-colors",
+                      likedOnly
+                        ? "border-accent bg-accent text-white"
+                        : "border-border hover:bg-surface"
+                    )}
+                  >
+                    Liked only
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "bulk" ? (
+            <PhotoGrid
+              photos={visibleBulkPhotos}
+              showDownload={false}
+              onToggleLike={handleToggleLike}
+              emptyMessage="No liked photos yet."
+            />
+          ) : (
+            <PhotoGrid photos={finalPhotos} showDownload />
+          )}
+        </>
+      )}
+
+      {loadingPhotos && (
         <p className="py-24 text-center text-sm text-muted">Loading your gallery…</p>
-      ) : (
-        folders &&
-        folders.length > 0 && <PhotoGrid photos={photos} showDownload />
       )}
     </div>
+  );
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "rounded-full border px-4 py-1.5 text-sm transition-colors",
+        active
+          ? "border-accent bg-accent text-white"
+          : "border-border text-foreground hover:bg-surface"
+      )}
+    >
+      {label}
+    </button>
   );
 }

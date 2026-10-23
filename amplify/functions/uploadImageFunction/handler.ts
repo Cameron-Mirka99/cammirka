@@ -15,7 +15,7 @@ import {
   buildThumbnailPhotoKey,
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
-import { syncPhotoTags } from "../shared/tagMetadata.js";
+import { syncPhotoTags, type PhotoCategory } from "../shared/tagMetadata.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME;
@@ -52,6 +52,15 @@ export const handler = async (
     if (uploads.length === 0) {
       return jsonResponse(event, 400, {
         message: "At least one image upload is required.",
+      }, "POST,OPTIONS");
+    }
+
+    // Belt-and-suspenders alongside publicPhotos's own filter: a client's
+    // private bulk-review photo must never be reachable through the public
+    // gallery's folder.
+    if (folderId === "public" && uploads.some((upload) => upload.category === "bulk")) {
+      return jsonResponse(event, 400, {
+        message: "Bulk-category photos cannot be uploaded to the public folder.",
       }, "POST,OPTIONS");
     }
 
@@ -124,7 +133,7 @@ export const handler = async (
             tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
             photoKey: canonicalKey,
             tags: upload.tags ?? [],
-            attributes: dimensions,
+            attributes: { ...dimensions, category: upload.category },
           });
         } catch (error) {
           await Promise.allSettled([
@@ -141,6 +150,7 @@ export const handler = async (
           fullKey,
           thumbnailKey,
           tags: upload.tags ?? [],
+          category: upload.category,
         };
       }),
     );
@@ -173,18 +183,24 @@ function parseBody(event: APIGatewayProxyEvent) {
   }
 }
 
+function normalizeCategory(value: unknown): PhotoCategory {
+  return value === "bulk" ? "bulk" : "final";
+}
+
 function normalizeUploads(body: {
   image?: string;
   imageName?: string;
   thumbnailImage?: string;
   thumbnailContentType?: string;
   tags?: string[];
+  category?: string;
   images?: Array<{
     image?: string;
     imageName?: string;
     thumbnailImage?: string;
     thumbnailContentType?: string;
     tags?: string[];
+    category?: string;
   }>;
 }) {
   if (!body) return [];
@@ -203,6 +219,7 @@ function normalizeUploads(body: {
         tags: Array.isArray(entry?.tags)
           ? entry.tags.filter((tag): tag is string => typeof tag === "string")
           : [],
+        category: normalizeCategory(entry?.category),
       }))
       .filter((entry) => entry.image && entry.imageName);
   }
@@ -221,6 +238,7 @@ function normalizeUploads(body: {
       tags: Array.isArray(body.tags)
         ? body.tags.filter((tag): tag is string => typeof tag === "string")
         : [],
+      category: normalizeCategory(body.category),
     }];
   }
   return [];

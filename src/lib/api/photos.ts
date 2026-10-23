@@ -1,5 +1,5 @@
 import { authFetchJson, publicFetchJson } from "./client";
-import type { PhotoListResponse } from "./types";
+import type { PhotoCategory, PhotoListResponse } from "./types";
 
 type PhotoListParams = {
   excludeKeys?: string[];
@@ -7,6 +7,8 @@ type PhotoListParams = {
   tag?: string;
   /** Omit for the default shuffled sample; "newest" returns the most recent first. */
   sort?: "newest";
+  category?: PhotoCategory;
+  likedOnly?: boolean;
 };
 
 export function fetchPublicPhotos(
@@ -68,12 +70,23 @@ export function deletePhoto(
   });
 }
 
+export function toggleLike(input: {
+  photoKey: string;
+  folderId: string;
+}): Promise<{ photoKey: string; liked: boolean; likedCount: number }> {
+  return authFetchJson("/toggle-like", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 type UploadItem = {
   imageName: string;
   image: string;
   thumbnailImage?: string;
   thumbnailContentType?: string;
   tags?: string[];
+  category?: PhotoCategory;
 };
 
 type UploadResult = {

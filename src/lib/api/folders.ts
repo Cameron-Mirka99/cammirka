@@ -12,6 +12,8 @@ export function fetchUserFolders(): Promise<{ folders: UserFolder[] }> {
 export function createFolder(input: {
   folderId: string;
   displayName?: string;
+  likeLimit?: number;
+  bulkRetentionDays?: number;
 }): Promise<FolderSummary> {
   return authFetchJson("/folders", {
     method: "POST",
@@ -23,6 +25,17 @@ export function deleteFolder(folderId: string): Promise<{ folderId: string }> {
   return authFetchJson("/folders", {
     method: "DELETE",
     body: JSON.stringify({ folderId }),
+  });
+}
+
+/** likeLimit only -- bulkRetentionDays is creation-time-only, rejected server-side. */
+export function updateFolder(input: {
+  folderId: string;
+  likeLimit: number;
+}): Promise<{ folderId: string; likeLimit: number }> {
+  return authFetchJson("/folders", {
+    method: "PATCH",
+    body: JSON.stringify(input),
   });
 }
 

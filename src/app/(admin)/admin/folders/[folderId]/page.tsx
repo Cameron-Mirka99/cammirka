@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAdminFolders, useDeleteFolder } from "@/lib/query/useAdminFolders";
 import { InvitePanel } from "./InvitePanel";
 import { AccessPanel } from "./AccessPanel";
+import { LikeSettingsPanel } from "./LikeSettingsPanel";
 import { PhotoLibrary } from "./PhotoLibrary";
 
 export default function FolderDetailPage() {
@@ -59,6 +60,7 @@ export default function FolderDetailPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <InvitePanel folderId={folderId} />
           <AccessPanel folderId={folderId} />
+          <LikeSettingsPanel folderId={folderId} />
         </div>
       )}
 

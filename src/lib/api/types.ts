@@ -1,3 +1,5 @@
+export type PhotoCategory = "bulk" | "final";
+
 export type Photo = {
   key: string;
   storageKey?: string;
@@ -8,6 +10,8 @@ export type Photo = {
   width?: number;
   height?: number;
   lastModified?: string;
+  category?: PhotoCategory;
+  liked?: boolean;
 };
 
 export type PhotoListMeta = {
@@ -39,6 +43,9 @@ export type FolderSummary = {
   displayName?: string;
   createdAt?: string;
   createdBy?: string;
+  likeLimit?: number;
+  likedCount?: number;
+  bulkRetentionDays?: number;
 };
 
 export type FolderUser = {
@@ -58,4 +65,6 @@ export type FolderUser = {
 export type UserFolder = {
   folderId: string;
   displayName?: string;
+  likeLimit?: number;
+  likedCount?: number;
 };

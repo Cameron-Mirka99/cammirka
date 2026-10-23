@@ -16,6 +16,8 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 type FolderEntry = {
   folderId: string;
   displayName?: string;
+  likeLimit?: number;
+  likedCount?: number;
 };
 
 export const handler = async (
@@ -96,6 +98,8 @@ async function loadFolderDisplayNames(folderIds: string[]) {
         folders.push({
           folderId: item.folderId,
           displayName: typeof item.displayName === "string" ? item.displayName : undefined,
+          likeLimit: typeof item.likeLimit === "number" ? item.likeLimit : undefined,
+          likedCount: typeof item.likedCount === "number" ? item.likedCount : undefined,
         });
       }
     }

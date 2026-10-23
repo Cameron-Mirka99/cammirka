@@ -1,4 +1,5 @@
 import { createThumbnailFile, toBase64 } from "./resizeImage";
+import type { PhotoCategory } from "@/lib/api/types";
 
 const MAX_UPLOAD_REQUEST_BYTES = 10 * 1024 * 1024;
 
@@ -22,11 +23,13 @@ export type UploadPayload = {
   thumbnailImage: string;
   thumbnailContentType: string;
   tags: string[];
+  category: PhotoCategory;
 };
 
 export async function buildUploadPayload(
   file: File,
-  tags: string[]
+  tags: string[],
+  category: PhotoCategory = "final"
 ): Promise<UploadPayload> {
   const image = await toBase64(file);
   const thumbnail = await createThumbnailFile(file);
@@ -37,6 +40,7 @@ export async function buildUploadPayload(
     thumbnailImage: await toBase64(thumbnail),
     thumbnailContentType: thumbnail.type || file.type || "image/jpeg",
     tags,
+    category,
   };
 }
 

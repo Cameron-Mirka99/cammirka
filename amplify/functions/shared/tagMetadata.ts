@@ -13,12 +13,16 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const DEFAULT_UNORDERED_SORT = 1_000_000;
 const MAX_SORT_ORDER = 1_000_000_000;
 
+export type PhotoCategory = "bulk" | "final";
+
 export type PhotoTagMetadata = {
   photoKey: string;
   tags: string[];
   tagKeys: string[];
   width?: number;
   height?: number;
+  category?: PhotoCategory;
+  liked?: boolean;
   updatedAt: string;
 };
 
@@ -70,6 +74,8 @@ export type PhotoAttributes = {
   tags: string[];
   width?: number;
   height?: number;
+  category: PhotoCategory;
+  liked: boolean;
 };
 
 export async function getPhotoMetadataMap(
@@ -101,6 +107,10 @@ export async function getPhotoMetadataMap(
         tags: Array.isArray(item.tags) ? item.tags : [],
         width: typeof item.width === "number" ? item.width : undefined,
         height: typeof item.height === "number" ? item.height : undefined,
+        // Missing category means this photo predates the bulk-review feature
+        // -- treat it as an already-delivered final, never as bulk.
+        category: item.category === "bulk" ? "bulk" : "final",
+        liked: item.liked === true,
       });
     }
   }
@@ -175,7 +185,7 @@ export async function syncPhotoTags(params: {
   tagAssignmentsTableName?: string;
   photoKey: string;
   tags: string[];
-  attributes?: { width?: number; height?: number };
+  attributes?: { width?: number; height?: number; category?: PhotoCategory };
 }) {
   const {
     photoMetadataTableName,
@@ -213,10 +223,14 @@ export async function syncPhotoTags(params: {
   const nextTagKeys = new Set(normalizedTags.map((tag) => tag.tagKey));
 
   // Always upsert, even with an empty tag list — row absence is no longer
-  // the "no tags" signal, since the row also carries width/height now and
-  // those need to survive a later tag edit that clears all tags.
+  // the "no tags" signal, since the row also carries width/height/category/
+  // liked now and those need to survive a later tag edit that clears all
+  // tags. category and liked are never supplied by a tag edit, so they must
+  // always be carried forward from the previous row or they'd silently reset.
   const width = attributes?.width ?? previousItem?.width;
   const height = attributes?.height ?? previousItem?.height;
+  const category = attributes?.category ?? previousItem?.category;
+  const liked = previousItem?.liked;
   await ddb.send(
     new PutCommand({
       TableName: photoMetadataTableName,
@@ -226,6 +240,8 @@ export async function syncPhotoTags(params: {
         tagKeys: normalizedTags.map((tag) => tag.tagKey),
         ...(width !== undefined ? { width } : {}),
         ...(height !== undefined ? { height } : {}),
+        ...(category !== undefined ? { category } : {}),
+        ...(liked !== undefined ? { liked } : {}),
         updatedAt: now,
       } satisfies PhotoTagMetadata,
     }),
@@ -389,7 +405,9 @@ export async function copyPhotoTags(params: {
     tagAssignmentsTableName,
     photoKey: destinationPhotoKey,
     tags: sourceTags,
-    attributes: { width: item?.width, height: item?.height },
+    // liked is deliberately not carried over -- a copy is a new photo, not
+    // a continuation of the client's prior like decision on the original.
+    attributes: { width: item?.width, height: item?.height, category: item?.category },
   });
 }
 
@@ -483,6 +501,8 @@ export async function updatePhotoDimensions(params: {
         tagKeys: Array.isArray(item?.tagKeys) ? item.tagKeys : [],
         width,
         height,
+        ...(item?.category !== undefined ? { category: item.category } : {}),
+        ...(item?.liked !== undefined ? { liked: item.liked } : {}),
         updatedAt: new Date().toISOString(),
       } satisfies PhotoTagMetadata,
     }),

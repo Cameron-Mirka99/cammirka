@@ -1,9 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getClaims, isAdmin } from "../shared/auth.js";
+import { isFolderMember } from "../shared/folderAccess.js";
 import { jsonResponse } from "../shared/response.js";
 import { getManagedPhotoKeysFromStorageKey } from "../shared/photoPaths.js";
 
@@ -42,7 +43,7 @@ export const handler = async (
       if (!username) {
         return jsonResponse(event, 401, { message: "Unauthorized." }, "POST,OPTIONS");
       }
-      const allowed = await isUserInFolder(username, managedKeys.folderId);
+      const allowed = await isFolderMember(ddb, FOLDER_USERS_TABLE_NAME, username, managedKeys.folderId);
       if (!allowed) {
         return jsonResponse(event, 403, { message: "Folder access not available." }, "POST,OPTIONS");
       }
@@ -74,17 +75,6 @@ function parseBody(event: APIGatewayProxyEvent) {
   } catch {
     return null;
   }
-}
-
-async function isUserInFolder(username: string, folderId: string) {
-  const result = await ddb.send(
-    new GetCommand({
-      TableName: FOLDER_USERS_TABLE_NAME,
-      Key: { folderId, username },
-    }),
-  );
-
-  return Boolean(result.Item);
 }
 
 function sanitizeDownloadName(fileName: string) {

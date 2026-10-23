@@ -3,6 +3,7 @@ import {
   fetchAllFolders,
   createFolder as createFolderApi,
   deleteFolder as deleteFolderApi,
+  updateFolder as updateFolderApi,
 } from "@/lib/api/folders";
 import type { FolderSummary } from "@/lib/api/types";
 import { queryKeys } from "./keys";
@@ -18,6 +19,14 @@ export function useCreateFolder() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: createFolderApi,
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.adminFolders }),
+  });
+}
+
+export function useUpdateFolder() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: updateFolderApi,
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.adminFolders }),
   });
 }

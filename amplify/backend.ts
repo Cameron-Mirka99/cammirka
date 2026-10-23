@@ -15,6 +15,8 @@ import {
   ProjectionType,
   Table,
 } from "aws-cdk-lib/aws-dynamodb";
+import { Rule, Schedule } from "aws-cdk-lib/aws-events";
+import { LambdaFunction } from "aws-cdk-lib/aws-events-targets";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Bucket } from "aws-cdk-lib/aws-s3";
 import { auth } from "./auth/resource.js";
@@ -37,7 +39,10 @@ import { listTags } from "./functions/listTags/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
+import { retentionSweep } from "./functions/retentionSweep/resource.js";
+import { toggleLike } from "./functions/toggleLike/resource.js";
 import { unbanFolderUser } from "./functions/unbanFolderUser/resource.js";
+import { updateFolder } from "./functions/updateFolder/resource.js";
 import { updatePhotoTags } from "./functions/updatePhotoTags/resource.js";
 import { updateTagCatalog } from "./functions/updateTagCatalog/resource.js";
 import { updateUser } from "./functions/updateUser/resource.js";
@@ -73,7 +78,10 @@ const backend = defineBackend({
   movePhoto,
   publicPhotos,
   removeFolderUser,
+  retentionSweep,
+  toggleLike,
   unbanFolderUser,
+  updateFolder,
   updatePhotoTags,
   updateTagCatalog,
   updateUser,
@@ -103,11 +111,15 @@ const allFunctions = [
   backend.movePhoto,
   backend.publicPhotos,
   backend.removeFolderUser,
+  backend.toggleLike,
   backend.unbanFolderUser,
+  backend.updateFolder,
   backend.updatePhotoTags,
   backend.updateTagCatalog,
   backend.updateUser,
   backend.uploadImageFunction,
+  // retentionSweep is deliberately excluded: it's EventBridge-triggered,
+  // never returns an API Gateway response, so it has no CORS to configure.
 ];
 for (const fn of allFunctions) {
   fn.addEnvironment("ALLOWED_ORIGINS", ALLOWED_ORIGINS.join(","));
@@ -275,6 +287,41 @@ backend.createFolder.addEnvironment(
   "FOLDERS_TABLE_NAME",
   foldersTable.tableName,
 );
+backend.updateFolder.addEnvironment(
+  "FOLDERS_TABLE_NAME",
+  foldersTable.tableName,
+);
+backend.toggleLike.addEnvironment(
+  "FOLDERS_TABLE_NAME",
+  foldersTable.tableName,
+);
+backend.toggleLike.addEnvironment(
+  "FOLDER_USERS_TABLE_NAME",
+  folderUsersTable.tableName,
+);
+backend.toggleLike.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
+backend.retentionSweep.addEnvironment(
+  "BUCKET_NAME",
+  photoBucket.bucketName,
+);
+backend.retentionSweep.addEnvironment(
+  "FOLDERS_TABLE_NAME",
+  foldersTable.tableName,
+);
+backend.retentionSweep.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
+backend.retentionSweep.addEnvironment(
+  "TAG_ASSIGNMENTS_TABLE_NAME",
+  tagAssignmentsTable.tableName,
+);
+// Logs every deletion candidate without deleting anything. Flip to "false"
+// only after reviewing at least one real scheduled run's CloudWatch output.
+backend.retentionSweep.addEnvironment("DRY_RUN", "true");
 backend.createInvite.addEnvironment(
   "FOLDERS_TABLE_NAME",
   foldersTable.tableName,
@@ -397,6 +444,14 @@ backend.unbanFolderUser.addEnvironment(
 );
 
 foldersTable.grantReadWriteData(backend.createFolder.resources.lambda);
+foldersTable.grantReadWriteData(backend.updateFolder.resources.lambda);
+foldersTable.grantReadWriteData(backend.toggleLike.resources.lambda);
+foldersTable.grantReadData(backend.retentionSweep.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.toggleLike.resources.lambda);
+folderUsersTable.grantReadData(backend.toggleLike.resources.lambda);
+photoBucket.grantReadWrite(backend.retentionSweep.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.retentionSweep.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.retentionSweep.resources.lambda);
 foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
 foldersTable.grantReadData(backend.uploadImageFunction.resources.lambda);
 foldersTable.grantReadData(backend.listFolders.resources.lambda);
@@ -556,6 +611,18 @@ foldersResource.addMethod("DELETE", deleteFolderIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
+const updateFolderIntegration = new LambdaIntegration(backend.updateFolder.resources.lambda);
+foldersResource.addMethod("PATCH", updateFolderIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const toggleLikeIntegration = new LambdaIntegration(backend.toggleLike.resources.lambda);
+const toggleLikeResource = restApi.root.addResource("toggle-like");
+toggleLikeResource.addMethod("POST", toggleLikeIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
 
 const invitesIntegration = new LambdaIntegration(backend.createInvite.resources.lambda);
 const invitesResource = restApi.root.addResource("invites");
@@ -692,6 +759,12 @@ const tagCatalogResource = restApi.root.addResource("tag-catalog");
 tagCatalogResource.addMethod("POST", updateTagCatalogIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
+});
+
+// Daily, off-peak UTC time -- the first scheduled resource in this repo.
+new Rule(infraStack, "RetentionSweepSchedule", {
+  schedule: Schedule.cron({ minute: "0", hour: "9" }),
+  targets: [new LambdaFunction(backend.retentionSweep.resources.lambda)],
 });
 
 backend.addOutput({
