@@ -196,10 +196,8 @@ export default function MyPhotosPage() {
           className={clsx(
             // z-[110]: above the lightbox (z-[100]) -- liking happens from
             // inside the maximized view too, so the notice must be visible there.
-            "fixed left-1/2 top-20 z-[110] flex w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-lg",
-            likeNotice.variant === "limit"
-              ? "border-accent bg-background text-foreground"
-              : "border-red-500 bg-background text-red-500"
+            "fixed left-1/2 top-20 z-[110] flex w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-white shadow-lg",
+            likeNotice.variant === "limit" ? "bg-accent" : "bg-red-500"
           )}
         >
           <span>{likeNotice.message}</span>
