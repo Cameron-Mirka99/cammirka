@@ -762,7 +762,12 @@ tagCatalogResource.addMethod("POST", updateTagCatalogIntegration, {
 });
 
 // Daily, off-peak UTC time -- the first scheduled resource in this repo.
-new Rule(infraStack, "RetentionSweepSchedule", {
+// Placed in the Lambda's own stack (not infraStack) deliberately: a Rule in
+// infraStack targeting a Lambda that lives in Amplify's shared function
+// stack creates a new infraStack -> function-stack edge, which combined
+// with the function stack's existing dependency on infraStack (table/bucket
+// grants) is a circular nested-stack dependency CloudFormation rejects.
+new Rule(Stack.of(backend.retentionSweep.resources.lambda), "RetentionSweepSchedule", {
   schedule: Schedule.cron({ minute: "0", hour: "9" }),
   targets: [new LambdaFunction(backend.retentionSweep.resources.lambda)],
 });
