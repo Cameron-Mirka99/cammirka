@@ -118,7 +118,7 @@ export function Header() {
             <DropdownMenu.Content
               align="end"
               sideOffset={12}
-              className="min-w-48 rounded-lg border border-border bg-surface p-2 text-sm text-foreground shadow-lg"
+              className="z-[60] min-w-48 rounded-lg border border-border bg-surface p-2 text-sm text-foreground shadow-lg"
             >
               {navLinks.map((link) => (
                 <DropdownMenu.Item key={link.href} asChild>
