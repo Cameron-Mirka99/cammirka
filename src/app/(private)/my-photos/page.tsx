@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { fetchAllFolders, fetchUserFolders } from "@/lib/api/folders";
 import { fetchFolderPhotos } from "@/lib/api/photos";
 import { PhotoGrid } from "@/components/gallery/PhotoGrid";
+import { FolderSelector } from "@/components/ui/FolderSelector";
 import type { Photo } from "@/lib/api/types";
 
 type FolderOption = { folderId: string; displayName?: string };
@@ -22,7 +23,13 @@ export default function MyPhotosPage() {
   useEffect(() => {
     const load = isAdmin ? fetchAllFolders() : fetchUserFolders();
     load
-      .then((res) => setFolders(res.folders))
+      .then((res) =>
+        setFolders(
+          [...res.folders].sort((a, b) =>
+            (a.displayName ?? a.folderId).localeCompare(b.displayName ?? b.folderId)
+          )
+        )
+      )
       .catch(() => setFolders([]));
   }, [isAdmin]);
 
@@ -85,7 +92,7 @@ export default function MyPhotosPage() {
     : "Private Gallery";
 
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-24 pt-32 sm:px-8">
+    <div className="mx-auto max-w-6xl px-5 pb-24 pt-32 sm:px-8 xl:max-w-none xl:w-[clamp(1152px,82vw,2560px)]">
       <header className="mb-8">
         <h1 className="font-serif text-3xl italic">{heading}</h1>
       </header>
@@ -98,20 +105,12 @@ export default function MyPhotosPage() {
       )}
 
       {folders && folders.length > 1 && (
-        <div className="mb-8 flex gap-2 overflow-x-auto pb-2">
-          {folders.map((f) => (
-            <button
-              key={f.folderId}
-              onClick={() => setSelectedFolderId(f.folderId)}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
-                selectedFolderId === f.folderId
-                  ? "border-accent bg-accent text-white"
-                  : "border-border hover:bg-surface"
-              }`}
-            >
-              {f.displayName ?? f.folderId}
-            </button>
-          ))}
+        <div className="mb-8">
+          <FolderSelector
+            folders={folders}
+            selectedFolderId={selectedFolderId}
+            onSelect={setSelectedFolderId}
+          />
         </div>
       )}
 
