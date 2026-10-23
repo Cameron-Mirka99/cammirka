@@ -112,10 +112,13 @@ export default function MyPhotosPage() {
 
   // The Bulk tab only exists while the folder actually has bulk photos --
   // once they're all liked-and-replaced or swept, it disappears and Final
-  // becomes the only tab.
+  // becomes the only tab. Symmetrically, default back to Bulk whenever
+  // there's nothing to show on Final yet.
   useEffect(() => {
     if (tab === "bulk" && bulkPhotos.length === 0 && finalPhotos.length > 0) {
       setTab("final");
+    } else if (tab === "final" && finalPhotos.length === 0 && bulkPhotos.length > 0) {
+      setTab("bulk");
     }
   }, [tab, bulkPhotos.length, finalPhotos.length]);
 
@@ -177,11 +180,13 @@ export default function MyPhotosPage() {
       {!loadingPhotos && folders && folders.length > 0 && (
         <>
           {bulkPhotos.length > 0 && (
-            <div className="mb-6 flex flex-wrap items-center gap-3">
-              <TabButton active={tab === "bulk"} label="Bulk" onClick={() => setTab("bulk")} />
-              <TabButton active={tab === "final"} label="Final" onClick={() => setTab("final")} />
+            <div className="mb-8">
+              <div className="flex justify-center gap-10 border-b border-border">
+                <TabButton active={tab === "bulk"} label="Bulk" onClick={() => setTab("bulk")} />
+                <TabButton active={tab === "final"} label="Final" onClick={() => setTab("final")} />
+              </div>
               {tab === "bulk" && (
-                <div className="ml-auto flex items-center gap-3 text-sm text-muted">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm text-muted">
                   {typeof selectedFolder?.likeLimit === "number" && (
                     <span>
                       {selectedFolder.likedCount ?? 0} of {selectedFolder.likeLimit} liked
@@ -236,10 +241,10 @@ function TabButton({
     <button
       onClick={onClick}
       className={clsx(
-        "rounded-full border px-4 py-1.5 text-sm transition-colors",
+        "-mb-px border-b-2 pb-2 text-sm uppercase tracking-wide transition-colors",
         active
-          ? "border-accent bg-accent text-white"
-          : "border-border text-foreground hover:bg-surface"
+          ? "border-accent text-foreground"
+          : "border-transparent text-muted hover:text-foreground"
       )}
     >
       {label}
