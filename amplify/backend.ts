@@ -17,8 +17,13 @@ import {
 } from "aws-cdk-lib/aws-dynamodb";
 import { Rule, Schedule } from "aws-cdk-lib/aws-events";
 import { LambdaFunction } from "aws-cdk-lib/aws-events-targets";
-import { PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { PolicyStatement, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { Bucket } from "aws-cdk-lib/aws-s3";
+import {
+  AwsCustomResource,
+  AwsCustomResourcePolicy,
+  PhysicalResourceId,
+} from "aws-cdk-lib/custom-resources";
 import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
 import { addFolderUser } from "./functions/addFolderUser/resource.js";
@@ -35,8 +40,11 @@ import { listUserFolders } from "./functions/listUserFolders/resource.js";
 import { listAllUsers } from "./functions/listAllUsers/resource.js";
 import { listFolders } from "./functions/listFolders/resource.js";
 import { listFolderUsers } from "./functions/listFolderUsers/resource.js";
+import { listStuckBulkUploads } from "./functions/listStuckBulkUploads/resource.js";
 import { listTags } from "./functions/listTags/resource.js";
 import { movePhoto } from "./functions/movePhoto/resource.js";
+import { presignBulkUpload } from "./functions/presignBulkUpload/resource.js";
+import { processBulkUpload } from "./functions/processBulkUpload/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { retentionSweep } from "./functions/retentionSweep/resource.js";
@@ -47,6 +55,7 @@ import { updatePhotoTags } from "./functions/updatePhotoTags/resource.js";
 import { updateTagCatalog } from "./functions/updateTagCatalog/resource.js";
 import { updateUser } from "./functions/updateUser/resource.js";
 import { uploadImageFunction } from "./functions/uploadImageFunction/resource.js";
+import { BULK_STAGING_PREFIX } from "./functions/shared/photoPaths.js";
 
 // Origins allowed to read API responses (see shared/response.ts). Update
 // with the deployed frontend's real origin once it's live.
@@ -74,8 +83,11 @@ const backend = defineBackend({
   listUserFolders,
   listFolders,
   listFolderUsers,
+  listStuckBulkUploads,
   listTags,
   movePhoto,
+  presignBulkUpload,
+  processBulkUpload,
   publicPhotos,
   removeFolderUser,
   retentionSweep,
@@ -107,8 +119,10 @@ const allFunctions = [
   backend.listUserFolders,
   backend.listFolders,
   backend.listFolderUsers,
+  backend.listStuckBulkUploads,
   backend.listTags,
   backend.movePhoto,
+  backend.presignBulkUpload,
   backend.publicPhotos,
   backend.removeFolderUser,
   backend.toggleLike,
@@ -118,8 +132,9 @@ const allFunctions = [
   backend.updateTagCatalog,
   backend.updateUser,
   backend.uploadImageFunction,
-  // retentionSweep is deliberately excluded: it's EventBridge-triggered,
-  // never returns an API Gateway response, so it has no CORS to configure.
+  // retentionSweep and processBulkUpload are deliberately excluded: both
+  // are event-triggered (EventBridge / S3), never return an API Gateway
+  // response, so neither has CORS to configure.
 ];
 for (const fn of allFunctions) {
   fn.addEnvironment("ALLOWED_ORIGINS", ALLOWED_ORIGINS.join(","));
@@ -322,6 +337,13 @@ backend.retentionSweep.addEnvironment(
 // Logs every deletion candidate without deleting anything. Flip to "false"
 // only after reviewing at least one real scheduled run's CloudWatch output.
 backend.retentionSweep.addEnvironment("DRY_RUN", "true");
+backend.presignBulkUpload.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
+backend.presignBulkUpload.addEnvironment("FOLDERS_TABLE_NAME", foldersTable.tableName);
+backend.processBulkUpload.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
+backend.processBulkUpload.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
+backend.processBulkUpload.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.processBulkUpload.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
+backend.listStuckBulkUploads.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 backend.createInvite.addEnvironment(
   "FOLDERS_TABLE_NAME",
   foldersTable.tableName,
@@ -452,6 +474,16 @@ folderUsersTable.grantReadData(backend.toggleLike.resources.lambda);
 photoBucket.grantReadWrite(backend.retentionSweep.resources.lambda);
 photoMetadataTable.grantReadWriteData(backend.retentionSweep.resources.lambda);
 tagAssignmentsTable.grantReadWriteData(backend.retentionSweep.resources.lambda);
+// Presigned PUT URLs are validated against the SIGNING role's actual IAM
+// permissions when the local app later uses them -- this role needs real
+// s3:PutObject even though presignBulkUpload itself never calls PutObject.
+photoBucket.grantWrite(backend.presignBulkUpload.resources.lambda);
+foldersTable.grantReadData(backend.presignBulkUpload.resources.lambda);
+photoBucket.grantReadWrite(backend.processBulkUpload.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.processBulkUpload.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.processBulkUpload.resources.lambda);
+tagAssignmentsTable.grantReadWriteData(backend.processBulkUpload.resources.lambda);
+photoBucket.grantRead(backend.listStuckBulkUploads.resources.lambda);
 foldersTable.grantReadWriteData(backend.createInvite.resources.lambda);
 foldersTable.grantReadData(backend.uploadImageFunction.resources.lambda);
 foldersTable.grantReadData(backend.listFolders.resources.lambda);
@@ -624,6 +656,20 @@ toggleLikeResource.addMethod("POST", toggleLikeIntegration, {
   authorizer,
 });
 
+const presignBulkUploadIntegration = new LambdaIntegration(backend.presignBulkUpload.resources.lambda);
+const presignBulkUploadResource = restApi.root.addResource("presign-bulk-upload");
+presignBulkUploadResource.addMethod("POST", presignBulkUploadIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const listStuckBulkUploadsIntegration = new LambdaIntegration(backend.listStuckBulkUploads.resources.lambda);
+const stuckBulkUploadsResource = restApi.root.addResource("stuck-bulk-uploads");
+stuckBulkUploadsResource.addMethod("GET", listStuckBulkUploadsIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
 const invitesIntegration = new LambdaIntegration(backend.createInvite.resources.lambda);
 const invitesResource = restApi.root.addResource("invites");
 invitesResource.addMethod("POST", invitesIntegration, {
@@ -770,6 +816,64 @@ tagCatalogResource.addMethod("POST", updateTagCatalogIntegration, {
 new Rule(Stack.of(backend.retentionSweep.resources.lambda), "RetentionSweepSchedule", {
   schedule: Schedule.cron({ minute: "0", hour: "9" }),
   targets: [new LambdaFunction(backend.retentionSweep.resources.lambda)],
+});
+
+// S3 -> processBulkUpload notification, scoped to the bulk-incoming/
+// staging prefix. The bucket is IMPORTED (Bucket.fromBucketName above),
+// not created by this app, so CDK's addEventNotification convenience
+// method can't be trusted here -- it relies on a code path for imported
+// buckets we can't fully verify. Wired explicitly instead:
+//   1. a resource-based permission letting S3 invoke this one function
+//   2. an AwsCustomResource calling S3::PutBucketNotificationConfiguration
+//      directly, with the exact JSON we construct
+// Placed in processBulkUpload's own stack (not infraStack), same reasoning
+// as the retentionSweep schedule above: a Rule/resource in infraStack that
+// targets a Lambda living in the shared function stack creates a new
+// infraStack -> function-stack edge, which combined with that stack's
+// existing dependency on infraStack (table/bucket grants) is exactly the
+// circular nested-stack dependency CloudFormation rejected last time.
+const processBulkUploadStack = Stack.of(backend.processBulkUpload.resources.lambda);
+
+backend.processBulkUpload.resources.lambda.addPermission("AllowS3Invoke", {
+  principal: new ServicePrincipal("s3.amazonaws.com"),
+  sourceArn: photoBucket.bucketArn,
+  sourceAccount: processBulkUploadStack.account,
+});
+
+const bulkUploadNotificationCall = {
+  service: "S3",
+  action: "putBucketNotificationConfiguration",
+  parameters: {
+    Bucket: photoBucket.bucketName,
+    NotificationConfiguration: {
+      LambdaFunctionConfigurations: [
+        {
+          LambdaFunctionArn: backend.processBulkUpload.resources.lambda.functionArn,
+          Events: ["s3:ObjectCreated:*"],
+          Filter: {
+            Key: {
+              FilterRules: [{ Name: "prefix", Value: BULK_STAGING_PREFIX }],
+            },
+          },
+        },
+      ],
+    },
+  },
+  physicalResourceId: PhysicalResourceId.of("BulkUploadNotificationConfig"),
+};
+
+new AwsCustomResource(processBulkUploadStack, "BulkUploadNotification", {
+  onCreate: bulkUploadNotificationCall,
+  onUpdate: bulkUploadNotificationCall,
+  policy: AwsCustomResourcePolicy.fromStatements([
+    new PolicyStatement({
+      actions: [
+        "s3:PutBucketNotificationConfiguration",
+        "s3:GetBucketNotificationConfiguration",
+      ],
+      resources: [photoBucket.bucketArn],
+    }),
+  ]),
 });
 
 backend.addOutput({

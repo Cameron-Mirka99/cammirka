@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useBackfillFolderUsers } from "@/lib/query/useAdminFolderUsers";
-import { backfillPhotoDimensions } from "@/lib/api/photos";
+import { backfillPhotoDimensions, fetchStuckBulkUploads, type StuckBulkUpload } from "@/lib/api/photos";
 
 type DimensionsProgress = {
   updated: number;
@@ -19,6 +19,23 @@ export default function MaintenancePage() {
   const [dimensionsProgress, setDimensionsProgress] = useState<DimensionsProgress | null>(null);
   const [dimensionsError, setDimensionsError] = useState<string | null>(null);
   const stopRequested = useRef(false);
+
+  const [stuckUploads, setStuckUploads] = useState<StuckBulkUpload[] | null>(null);
+  const [stuckLoading, setStuckLoading] = useState(false);
+  const [stuckError, setStuckError] = useState<string | null>(null);
+
+  const checkStuckUploads = async () => {
+    setStuckLoading(true);
+    setStuckError(null);
+    try {
+      const res = await fetchStuckBulkUploads();
+      setStuckUploads(res.items);
+    } catch (err) {
+      setStuckError(err instanceof Error ? err.message : "Could not check stuck uploads.");
+    } finally {
+      setStuckLoading(false);
+    }
+  };
 
   const runDimensionsBackfill = async () => {
     setDimensionsRunning(true);
@@ -110,6 +127,43 @@ export default function MaintenancePage() {
               ? `${dimensionsProgress.remaining} of ${dimensionsProgress.totalMissing} remaining`
               : "all done"}
           </p>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-border p-5">
+        <h2 className="text-sm font-medium">Stuck bulk uploads</h2>
+        <p className="mt-1 text-sm text-muted">
+          The bulk-upload app PUTs files straight to S3; an automatic S3
+          event triggers processing (thumbnail + metadata). Anything still
+          sitting here more than a few minutes after being uploaded failed
+          processing and needs a look (check CloudWatch logs for the exact
+          error).
+        </p>
+        <button
+          onClick={checkStuckUploads}
+          disabled={stuckLoading}
+          className="mt-4 rounded-full bg-accent px-5 py-1.5 text-sm text-white disabled:opacity-50"
+        >
+          {stuckLoading ? "Checking…" : "Check now"}
+        </button>
+        {stuckError && <p className="mt-3 text-sm text-red-500">{stuckError}</p>}
+        {stuckUploads && (
+          stuckUploads.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">Nothing stuck.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-border border-y border-border text-sm">
+              {stuckUploads.map((item) => (
+                <li key={item.key} className="flex items-center justify-between py-2">
+                  <span>
+                    {item.folderId}/{item.fileName}
+                  </span>
+                  <span className="text-xs text-muted">
+                    stuck {Math.floor(item.ageSeconds / 60)}m
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
         )}
       </section>
     </div>

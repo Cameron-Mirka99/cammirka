@@ -110,6 +110,40 @@ export async function uploadImage(
   return res.results[0];
 }
 
+export type PresignedBulkUpload = {
+  fileName: string;
+  ok: boolean;
+  finalFileName?: string;
+  key?: string;
+  uploadUrl?: string;
+  message?: string;
+};
+
+/** For the external bulk-upload app: a presigned S3 PUT URL per file, no API Gateway payload limit. */
+export function presignBulkUpload(input: {
+  folderId: string;
+  files: { fileName: string; contentType: string }[];
+}): Promise<{ uploads: PresignedBulkUpload[] }> {
+  return authFetchJson("/presign-bulk-upload", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export type StuckBulkUpload = {
+  folderId: string;
+  fileName: string;
+  key: string;
+  ageSeconds: number;
+};
+
+export function fetchStuckBulkUploads(
+  minAgeSeconds?: number
+): Promise<{ items: StuckBulkUpload[] }> {
+  const query = minAgeSeconds ? `?minAgeSeconds=${minAgeSeconds}` : "";
+  return authFetchJson(`/stuck-bulk-uploads${query}`, { method: "GET" });
+}
+
 export type BackfillDimensionsResult = {
   totalMissing: number;
   processed: number;

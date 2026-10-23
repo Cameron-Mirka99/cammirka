@@ -5,7 +5,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
-import { Jimp } from "jimp";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getClaims, isAdmin } from "../shared/auth.js";
 import { jsonResponse } from "../shared/response.js";
@@ -16,6 +15,7 @@ import {
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
 import { syncPhotoTags, type PhotoCategory } from "../shared/tagMetadata.js";
+import { createThumbnail, guessContentType, readDimensions } from "../shared/thumbnail.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME;
@@ -24,7 +24,6 @@ const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
 const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
 const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const THUMBNAIL_MAX_WIDTH = Number.parseInt(process.env.THUMBNAIL_MAX_WIDTH ?? "960", 10);
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -244,64 +243,6 @@ function normalizeUploads(body: {
   return [];
 }
 
-
-function guessContentType(filename: string) {
-  const ext = filename.toLowerCase().split(".").pop();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    case "webp":
-      return "image/webp";
-    default:
-      return null;
-  }
-}
-
-async function readDimensions(
-  imageBuffer: Buffer,
-): Promise<{ width?: number; height?: number }> {
-  try {
-    const image = await Jimp.read(imageBuffer);
-    return { width: image.width, height: image.height };
-  } catch (error) {
-    console.error("Could not read image dimensions", error);
-    return {};
-  }
-}
-
-async function createThumbnail(
-  imageBuffer: Buffer,
-  contentType: string,
-): Promise<{ buffer: Buffer; contentType: string }> {
-  // GIFs pass through untouched — jimp doesn't round-trip animated GIFs,
-  // and preserving the animation matters more than a resized thumbnail.
-  if (contentType === "image/gif") {
-    return { buffer: imageBuffer, contentType };
-  }
-
-  try {
-    const image = await Jimp.read(imageBuffer);
-    if (image.width > THUMBNAIL_MAX_WIDTH) {
-      image.resize({ w: THUMBNAIL_MAX_WIDTH });
-    }
-
-    if (contentType === "image/png") {
-      return { buffer: await image.getBuffer("image/png"), contentType: "image/png" };
-    }
-    return {
-      buffer: await image.getBuffer("image/jpeg", { quality: 82 }),
-      contentType: "image/jpeg",
-    };
-  } catch (error) {
-    console.error("Thumbnail generation failed, using the original image", error);
-    return { buffer: imageBuffer, contentType };
-  }
-}
 
 async function deleteObjectIfPresent(key: string) {
   try {

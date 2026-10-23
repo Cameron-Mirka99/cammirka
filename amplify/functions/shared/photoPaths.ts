@@ -46,6 +46,28 @@ export function buildThumbnailPhotoKey(folderId: string, fileName: string) {
   return `${sanitizeRequiredFolderId(folderId)}/${PHOTO_VARIANTS.thumb}/${sanitizeRequiredFileName(fileName)}`;
 }
 
+// Staging area for the direct-to-S3 bulk upload path: the local app PUTs
+// raw files here via a presigned URL, processBulkUpload picks them up via
+// an S3 event, and moves them into the canonical full/thumb keys above.
+// Deliberately outside {folderId}/full|thumb/ so processBulkUpload's own
+// writes can never re-trigger the notification that invokes it.
+export const BULK_STAGING_PREFIX = "bulk-incoming/";
+
+export function buildBulkStagingKey(folderId: string, fileName: string) {
+  return `${BULK_STAGING_PREFIX}${sanitizeRequiredFolderId(folderId)}/${sanitizeRequiredFileName(fileName)}`;
+}
+
+export function parseBulkStagingKey(key: string): { folderId: string; fileName: string } | null {
+  if (!key.startsWith(BULK_STAGING_PREFIX)) return null;
+  const rest = key.slice(BULK_STAGING_PREFIX.length);
+  const segments = rest.split("/");
+  if (segments.length < 2) return null;
+  const fileName = segments[segments.length - 1];
+  const folderId = segments.slice(0, -1).join("/");
+  if (!fileName || !folderId) return null;
+  return { folderId, fileName };
+}
+
 export function buildPhotoUrls(cloudfrontDomain: string, folderId: string, fileName: string) {
   const baseUrl = `https://${cloudfrontDomain}`.replace(/\/+$/, "");
   return {
