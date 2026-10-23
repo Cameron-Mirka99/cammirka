@@ -1,12 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
+  DeleteCommand,
   GetCommand,
   PutCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import crypto from "crypto";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
 const INVITES_TABLE_NAME = process.env.INVITES_TABLE_NAME;
@@ -18,18 +21,18 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!FOLDERS_TABLE_NAME || !INVITES_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
     const body = parseBody(event);
     const folderId = sanitizeFolderId(body?.folderId);
     if (!folderId) {
-      return response(400, { message: "folderId is required." });
+      return jsonResponse(event, 400, { message: "folderId is required." }, "POST,OPTIONS");
     }
 
     const folderResult = await ddb.send(
@@ -40,7 +43,31 @@ export const handler = async (
     );
 
     if (!folderResult.Item) {
-      return response(404, { message: "Folder not found." });
+      return jsonResponse(event, 404, { message: "Folder not found." }, "POST,OPTIONS");
+    }
+
+    const existingInviteCode =
+      typeof folderResult.Item.inviteCode === "string"
+        ? folderResult.Item.inviteCode
+        : undefined;
+
+    if (body?.revoke === true) {
+      if (existingInviteCode) {
+        await ddb.send(
+          new DeleteCommand({
+            TableName: INVITES_TABLE_NAME,
+            Key: { inviteCode: existingInviteCode },
+          }),
+        );
+      }
+      await ddb.send(
+        new UpdateCommand({
+          TableName: FOLDERS_TABLE_NAME,
+          Key: { folderId },
+          UpdateExpression: "REMOVE inviteCode",
+        }),
+      );
+      return jsonResponse(event, 200, { folderId, revoked: true }, "POST,OPTIONS");
     }
 
     const expiresInDays =
@@ -52,11 +79,22 @@ export const handler = async (
     const createdBy =
       claims?.["cognito:username"] ?? claims?.username ?? "unknown";
 
-    const existingInviteCode =
-      typeof folderResult.Item.inviteCode === "string"
-        ? folderResult.Item.inviteCode
-        : undefined;
-    const inviteCode = existingInviteCode ?? crypto.randomBytes(16).toString("hex");
+    const rotate = body?.rotate === true;
+    const inviteCode =
+      rotate || !existingInviteCode
+        ? crypto.randomBytes(16).toString("hex")
+        : existingInviteCode;
+
+    // Rotating invalidates the old link immediately, rather than leaving a
+    // second valid code around — delete the old InvitesTable row first.
+    if (rotate && existingInviteCode && existingInviteCode !== inviteCode) {
+      await ddb.send(
+        new DeleteCommand({
+          TableName: INVITES_TABLE_NAME,
+          Key: { inviteCode: existingInviteCode },
+        }),
+      );
+    }
 
     await ddb.send(
       new PutCommand({
@@ -71,7 +109,7 @@ export const handler = async (
       }),
     );
 
-    if (!existingInviteCode) {
+    if (!existingInviteCode || rotate) {
       await ddb.send(
         new UpdateCommand({
           TableName: FOLDERS_TABLE_NAME,
@@ -84,11 +122,11 @@ export const handler = async (
       );
     }
 
-    return response(201, { inviteCode, folderId, expiresAt });
+    return jsonResponse(event, 201, { inviteCode, folderId, expiresAt }, "POST,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to create invite.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to create invite.", error: message }, "POST,OPTIONS");
   }
 };
 
@@ -109,32 +147,3 @@ function sanitizeFolderId(value?: string) {
   return trimmed;
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

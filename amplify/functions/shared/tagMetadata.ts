@@ -17,6 +17,8 @@ export type PhotoTagMetadata = {
   photoKey: string;
   tags: string[];
   tagKeys: string[];
+  width?: number;
+  height?: number;
   updatedAt: string;
 };
 
@@ -64,16 +66,22 @@ export function normalizeTags(values: string[]) {
     .map(([tagKey, label]) => ({ tagKey, label }));
 }
 
-export async function getPhotoTagsMap(
+export type PhotoAttributes = {
+  tags: string[];
+  width?: number;
+  height?: number;
+};
+
+export async function getPhotoMetadataMap(
   tableName: string | undefined,
   photoKeys: string[],
 ) {
   if (!tableName || photoKeys.length === 0) {
-    return new Map<string, string[]>();
+    return new Map<string, PhotoAttributes>();
   }
 
   const uniqueKeys = Array.from(new Set(photoKeys.filter(Boolean)));
-  const results = new Map<string, string[]>();
+  const results = new Map<string, PhotoAttributes>();
 
   for (let index = 0; index < uniqueKeys.length; index += 100) {
     const chunk = uniqueKeys.slice(index, index + 100);
@@ -89,7 +97,11 @@ export async function getPhotoTagsMap(
 
     const items = response.Responses?.[tableName] as PhotoTagMetadata[] | undefined;
     for (const item of items ?? []) {
-      results.set(item.photoKey, Array.isArray(item.tags) ? item.tags : []);
+      results.set(item.photoKey, {
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        width: typeof item.width === "number" ? item.width : undefined,
+        height: typeof item.height === "number" ? item.height : undefined,
+      });
     }
   }
 
@@ -163,6 +175,7 @@ export async function syncPhotoTags(params: {
   tagAssignmentsTableName?: string;
   photoKey: string;
   tags: string[];
+  attributes?: { width?: number; height?: number };
 }) {
   const {
     photoMetadataTableName,
@@ -170,6 +183,7 @@ export async function syncPhotoTags(params: {
     tagAssignmentsTableName,
     photoKey,
     tags,
+    attributes,
   } = params;
 
   if (!photoMetadataTableName || !tagCatalogTableName || !tagAssignmentsTableName || !photoKey) {
@@ -198,28 +212,24 @@ export async function syncPhotoTags(params: {
 
   const nextTagKeys = new Set(normalizedTags.map((tag) => tag.tagKey));
 
-  if (normalizedTags.length === 0) {
-    if (previousItem) {
-      await ddb.send(
-        new DeleteCommand({
-          TableName: photoMetadataTableName,
-          Key: { photoKey },
-        }),
-      );
-    }
-  } else {
-    await ddb.send(
-      new PutCommand({
-        TableName: photoMetadataTableName,
-        Item: {
-          photoKey,
-          tags: normalizedTags.map((tag) => tag.label),
-          tagKeys: normalizedTags.map((tag) => tag.tagKey),
-          updatedAt: now,
-        } satisfies PhotoTagMetadata,
-      }),
-    );
-  }
+  // Always upsert, even with an empty tag list — row absence is no longer
+  // the "no tags" signal, since the row also carries width/height now and
+  // those need to survive a later tag edit that clears all tags.
+  const width = attributes?.width ?? previousItem?.width;
+  const height = attributes?.height ?? previousItem?.height;
+  await ddb.send(
+    new PutCommand({
+      TableName: photoMetadataTableName,
+      Item: {
+        photoKey,
+        tags: normalizedTags.map((tag) => tag.label),
+        tagKeys: normalizedTags.map((tag) => tag.tagKey),
+        ...(width !== undefined ? { width } : {}),
+        ...(height !== undefined ? { height } : {}),
+        updatedAt: now,
+      } satisfies PhotoTagMetadata,
+    }),
+  );
 
   for (const tag of normalizedTags) {
     const existing = await ddb.send(
@@ -379,6 +389,7 @@ export async function copyPhotoTags(params: {
     tagAssignmentsTableName,
     photoKey: destinationPhotoKey,
     tags: sourceTags,
+    attributes: { width: item?.width, height: item?.height },
   });
 }
 
@@ -439,6 +450,43 @@ export async function deletePhotoTags(params: {
       }),
     );
   }
+}
+
+/**
+ * Sets width/height for a photo without touching its tags — used by the
+ * dimensions backfill job, which has no tag information to provide and
+ * must not accidentally clear a photo's existing tags.
+ */
+export async function updatePhotoDimensions(params: {
+  photoMetadataTableName?: string;
+  photoKey: string;
+  width: number;
+  height: number;
+}) {
+  const { photoMetadataTableName, photoKey, width, height } = params;
+  if (!photoMetadataTableName || !photoKey) return;
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: photoMetadataTableName,
+      Key: { photoKey },
+    }),
+  );
+  const item = existing.Item as PhotoTagMetadata | undefined;
+
+  await ddb.send(
+    new PutCommand({
+      TableName: photoMetadataTableName,
+      Item: {
+        photoKey,
+        tags: Array.isArray(item?.tags) ? item.tags : [],
+        tagKeys: Array.isArray(item?.tagKeys) ? item.tagKeys : [],
+        width,
+        height,
+        updatedAt: new Date().toISOString(),
+      } satisfies PhotoTagMetadata,
+    }),
+  );
 }
 
 export async function listPhotoKeysForTag(

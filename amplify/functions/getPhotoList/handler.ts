@@ -2,6 +2,8 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 import {
   encodeS3Key,
   isDirectPhotoObjectKey,
@@ -9,7 +11,7 @@ import {
   sanitizeFolderId,
 } from "../shared/photoPaths.js";
 import {
-  getPhotoTagsMap,
+  getPhotoMetadataMap,
   listPhotoKeysForTag,
 } from "../shared/tagMetadata.js";
 
@@ -27,6 +29,7 @@ type RequestBody = {
   excludeKeys?: string[];
   limit?: number;
   tag?: string;
+  sort?: string;
 };
 
 type ListedPhoto = {
@@ -34,6 +37,7 @@ type ListedPhoto = {
   fullKey?: string;
   thumbnailKey?: string;
   legacyKey?: string;
+  lastModified?: Date;
 };
 
 export const handler = async (
@@ -41,15 +45,15 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!BUCKET) {
-      return response(500, { message: "BUCKET_NAME is not configured" });
+      return jsonResponse(event, 500, { message: "BUCKET_NAME is not configured" }, "POST,GET,OPTIONS");
     }
     if (!CLOUDFRONT_DOMAIN) {
-      return response(500, { message: "CLOUDFRONT_DOMAIN is not configured" });
+      return jsonResponse(event, 500, { message: "CLOUDFRONT_DOMAIN is not configured" }, "POST,GET,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!claims) {
-      return response(401, { message: "Unauthorized." });
+      return jsonResponse(event, 401, { message: "Unauthorized." }, "POST,GET,OPTIONS");
     }
 
     const isAdminUser = isAdmin(claims);
@@ -58,6 +62,7 @@ export const handler = async (
     let limit = DEFAULT_LIMIT;
     let requestedFolderId: string | undefined;
     let requestedTag: string | undefined;
+    let sortNewest = false;
 
     if (event?.body) {
       try {
@@ -73,6 +78,9 @@ export const handler = async (
         }
         if (typeof body.tag === "string") {
           requestedTag = body.tag;
+        }
+        if (body.sort === "newest") {
+          sortNewest = true;
         }
       } catch {
         // ignore body parse errors
@@ -101,6 +109,9 @@ export const handler = async (
       if (query.tag) {
         requestedTag = query.tag;
       }
+      if (query.sort === "newest") {
+        sortNewest = true;
+      }
     }
 
     const username =
@@ -111,14 +122,14 @@ export const handler = async (
       folderId = sanitizeFolderId(requestedFolderId);
     } else if (!isAdminUser && requestedFolderId) {
       if (!FOLDER_USERS_TABLE_NAME) {
-        return response(500, { message: "FOLDER_USERS_TABLE_NAME is not configured." });
+        return jsonResponse(event, 500, { message: "FOLDER_USERS_TABLE_NAME is not configured." }, "POST,GET,OPTIONS");
       }
       if (!username) {
-        return response(401, { message: "Unauthorized." });
+        return jsonResponse(event, 401, { message: "Unauthorized." }, "POST,GET,OPTIONS");
       }
       const allowed = await isUserInFolder(username, requestedFolderId);
       if (!allowed) {
-        return response(403, { message: "Folder access not available." });
+        return jsonResponse(event, 403, { message: "Folder access not available." }, "POST,GET,OPTIONS");
       }
       folderId = sanitizeFolderId(requestedFolderId);
     }
@@ -128,7 +139,7 @@ export const handler = async (
     }
 
     if (!folderId) {
-      return response(403, { message: "Folder access not available." });
+      return jsonResponse(event, 403, { message: "Folder access not available." }, "POST,GET,OPTIONS");
     }
 
     const excludeSet = new Set(excludeKeys);
@@ -164,6 +175,7 @@ export const handler = async (
         } else {
           current.legacyKey = obj.Key;
         }
+        if (obj.LastModified) current.lastModified = obj.LastModified;
         candidates.set(identity.canonicalKey, current);
       }
 
@@ -188,25 +200,31 @@ export const handler = async (
 
       return !excludeSet.has(photo.canonicalKey) && !excludeSet.has(primaryKey);
     });
-    const selectedPhotos = samplePhotos(eligiblePhotos, limit);
+    const selectedPhotos = sortNewest
+      ? sortByNewest(eligiblePhotos).slice(0, limit)
+      : samplePhotos(eligiblePhotos, limit);
     const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
-    const photoTags = await getPhotoTagsMap(
+    const photoMeta = await getPhotoMetadataMap(
       PHOTO_METADATA_TABLE_NAME,
       selectedPhotos.map((photo) => photo.canonicalKey),
     );
     const photos = selectedPhotos.map((photo) => {
       const storageKey = photo.fullKey ?? photo.legacyKey;
       const thumbnailKey = photo.thumbnailKey ?? photo.fullKey ?? photo.legacyKey;
+      const meta = photoMeta.get(photo.canonicalKey);
       return {
         key: photo.canonicalKey,
         storageKey,
         url: `${baseUrl}/${encodeS3Key(storageKey!)}`,
         thumbnailUrl: `${baseUrl}/${encodeS3Key(thumbnailKey!)}`,
-        tags: photoTags.get(photo.canonicalKey) ?? [],
+        tags: meta?.tags ?? [],
+        width: meta?.width,
+        height: meta?.height,
+        lastModified: photo.lastModified?.toISOString(),
       };
     });
 
-    return response(200, {
+    return jsonResponse(event, 200, {
       photos,
       meta: {
         requested: limit,
@@ -217,42 +235,14 @@ export const handler = async (
         folderId,
         tag: requestedTag ?? null,
       },
-    });
+    }, "POST,GET,OPTIONS");
   } catch (err) {
     console.error(err);
     const message = err instanceof Error ? err.message : "Unknown error";
-    return response(500, { message: "Error fetching photos", error: message });
+    return jsonResponse(event, 500, { message: "Error fetching photos", error: message }, "POST,GET,OPTIONS");
   }
 };
 
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}
-
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims: Record<string, string>) {
-  const groups = claims["cognito:groups"];
-  return typeof groups === "string" && groups.includes("admin");
-}
 
 async function isUserInFolder(username: string, folderId: string) {
   const result = await ddb.send(
@@ -273,4 +263,12 @@ function samplePhotos<T>(items: T[], limit: number) {
     [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
   }
   return shuffled.slice(0, limit);
+}
+
+function sortByNewest(items: ListedPhoto[]) {
+  return [...items].sort((a, b) => {
+    const aTime = a.lastModified?.getTime() ?? 0;
+    const bTime = b.lastModified?.getTime() ?? 0;
+    return bTime - aTime;
+  });
 }

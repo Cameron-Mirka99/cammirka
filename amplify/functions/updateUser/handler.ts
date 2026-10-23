@@ -3,6 +3,8 @@ import {
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
 
@@ -13,12 +15,12 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!USER_POOL_ID) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
     const body = parseBody(event);
@@ -27,11 +29,11 @@ export const handler = async (
     const familyName = typeof body?.familyName === "string" ? body.familyName.trim() : "";
 
     if (!username) {
-      return response(400, { message: "username is required." });
+      return jsonResponse(event, 400, { message: "username is required." }, "POST,OPTIONS");
     }
 
     if (!givenName || !familyName) {
-      return response(400, { message: "First name and last name are required." });
+      return jsonResponse(event, 400, { message: "First name and last name are required." }, "POST,OPTIONS");
     }
 
     await cognito.send(
@@ -55,16 +57,16 @@ export const handler = async (
       }),
     );
 
-    return response(200, {
+    return jsonResponse(event, 200, {
       username,
       givenName,
       familyName,
       name: `${givenName} ${familyName}`.trim(),
-    });
+    }, "POST,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to update user.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to update user.", error: message }, "POST,OPTIONS");
   }
 };
 
@@ -77,32 +79,3 @@ function parseBody(event: APIGatewayProxyEvent) {
   }
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

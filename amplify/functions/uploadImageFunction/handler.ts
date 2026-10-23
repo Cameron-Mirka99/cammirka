@@ -5,7 +5,10 @@ import {
 } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { Jimp } from "jimp";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 import {
   buildCanonicalPhotoKey,
   buildFullPhotoKey,
@@ -28,28 +31,28 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!BUCKET_NAME || !FOLDERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
     const body = parseBody(event);
     const folderId = sanitizeFolderId(body?.folderId);
 
     if (!folderId) {
-      return response(400, {
+      return jsonResponse(event, 400, {
         message: "folderId is required.",
-      });
+      }, "POST,OPTIONS");
     }
 
     const uploads = normalizeUploads(body);
     if (uploads.length === 0) {
-      return response(400, {
+      return jsonResponse(event, 400, {
         message: "At least one image upload is required.",
-      });
+      }, "POST,OPTIONS");
     }
 
     if (folderId !== "public") {
@@ -61,7 +64,7 @@ export const handler = async (
       );
 
       if (!folderExists.Item) {
-        return response(404, { message: "Folder does not exist." });
+        return jsonResponse(event, 404, { message: "Folder does not exist." }, "POST,OPTIONS");
       }
     }
 
@@ -96,6 +99,7 @@ export const handler = async (
           thumbnailBuffer ?? imageBuffer,
           upload.thumbnailContentType || contentType,
         );
+        const dimensions = await readDimensions(imageBuffer);
 
         const putFullCommand = new PutObjectCommand({
           Bucket: BUCKET_NAME,
@@ -120,6 +124,7 @@ export const handler = async (
             tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
             photoKey: canonicalKey,
             tags: upload.tags ?? [],
+            attributes: dimensions,
           });
         } catch (error) {
           await Promise.allSettled([
@@ -142,20 +147,20 @@ export const handler = async (
 
     const failed = results.filter((entry) => !entry.ok);
     if (failed.length > 0) {
-      return response(207, {
+      return jsonResponse(event, 207, {
         message: "Some uploads failed.",
         results,
-      });
+      }, "POST,OPTIONS");
     }
 
-    return response(200, {
+    return jsonResponse(event, 200, {
       message: `Uploaded ${results.length} image(s) successfully.`,
       results,
-    });
+    }, "POST,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: `Server error: ${message}` });
+    return jsonResponse(event, 500, { message: `Server error: ${message}` }, "POST,OPTIONS");
   }
 };
 
@@ -221,35 +226,6 @@ function normalizeUploads(body: {
   return [];
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}
 
 function guessContentType(filename: string) {
   const ext = filename.toLowerCase().split(".").pop();
@@ -268,12 +244,45 @@ function guessContentType(filename: string) {
   }
 }
 
+async function readDimensions(
+  imageBuffer: Buffer,
+): Promise<{ width?: number; height?: number }> {
+  try {
+    const image = await Jimp.read(imageBuffer);
+    return { width: image.width, height: image.height };
+  } catch (error) {
+    console.error("Could not read image dimensions", error);
+    return {};
+  }
+}
+
 async function createThumbnail(
   imageBuffer: Buffer,
   contentType: string,
 ): Promise<{ buffer: Buffer; contentType: string }> {
-  void THUMBNAIL_MAX_WIDTH;
-  return { buffer: imageBuffer, contentType };
+  // GIFs pass through untouched — jimp doesn't round-trip animated GIFs,
+  // and preserving the animation matters more than a resized thumbnail.
+  if (contentType === "image/gif") {
+    return { buffer: imageBuffer, contentType };
+  }
+
+  try {
+    const image = await Jimp.read(imageBuffer);
+    if (image.width > THUMBNAIL_MAX_WIDTH) {
+      image.resize({ w: THUMBNAIL_MAX_WIDTH });
+    }
+
+    if (contentType === "image/png") {
+      return { buffer: await image.getBuffer("image/png"), contentType: "image/png" };
+    }
+    return {
+      buffer: await image.getBuffer("image/jpeg", { quality: 82 }),
+      contentType: "image/jpeg",
+    };
+  } catch (error) {
+    console.error("Thumbnail generation failed, using the original image", error);
+    return { buffer: imageBuffer, contentType };
+  }
 }
 
 async function deleteObjectIfPresent(key: string) {

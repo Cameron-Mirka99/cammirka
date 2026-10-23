@@ -5,6 +5,8 @@ import {
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
@@ -21,27 +23,27 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!FOLDER_USERS_TABLE_NAME || !FOLDERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "GET,OPTIONS");
     }
 
     const claims = getClaims(event);
     const username =
       claims?.["cognito:username"] ?? claims?.username ?? claims?.sub;
     if (!username) {
-      return response(401, { message: "Unauthorized." });
+      return jsonResponse(event, 401, { message: "Unauthorized." }, "GET,OPTIONS");
     }
 
     const folderIds = await queryUserFolders(username);
     if (folderIds.length === 0) {
-      return response(200, { folders: [] });
+      return jsonResponse(event, 200, { folders: [] }, "GET,OPTIONS");
     }
 
     const folders = await loadFolderDisplayNames(folderIds);
-    return response(200, { folders });
+    return jsonResponse(event, 200, { folders }, "GET,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to list user folders.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to list user folders.", error: message }, "GET,OPTIONS");
   }
 };
 
@@ -110,26 +112,3 @@ function chunk<T>(items: T[], size: number) {
   return result;
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "GET,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

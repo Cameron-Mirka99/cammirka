@@ -5,6 +5,8 @@ import {
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
@@ -19,12 +21,12 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!USER_POOL_ID || !FOLDER_USERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
     let paginationToken: string | undefined;
@@ -63,14 +65,16 @@ export const handler = async (
       paginationToken = result.PaginationToken;
     } while (paginationToken);
 
-    return response(200, { scanned, updated });
+    return jsonResponse(event, 200, { scanned, updated }, "POST,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, {
-      message: "Failed to backfill folder users.",
-      error: message,
-    });
+    return jsonResponse(
+      event,
+      500,
+      { message: "Failed to backfill folder users.", error: message },
+      "POST,OPTIONS",
+    );
   }
 };
 
@@ -78,32 +82,3 @@ function getAttribute(attrs: CognitoAttribute[], name: string) {
   return attrs.find((attr) => attr.Name === name)?.Value;
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

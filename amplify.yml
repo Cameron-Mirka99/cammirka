@@ -5,6 +5,10 @@ backend:
       commands:
         - npm ci
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID --outputs-out-dir src --outputs-format json
+# TODO: this frontend phase still assumes the old CRA build (a static
+# `build/` directory). The frontend is now Next.js, whose build output and
+# Amplify Hosting SSR deployment artifacts work differently — update and
+# verify against a real Amplify Hosting build before deploying this branch.
 frontend:
   phases:
     preBuild:

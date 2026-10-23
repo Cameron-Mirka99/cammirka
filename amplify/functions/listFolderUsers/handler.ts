@@ -5,6 +5,8 @@ import {
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 
 const USER_POOL_ID = process.env.USER_POOL_ID;
 const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
@@ -18,12 +20,12 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!USER_POOL_ID || !FOLDER_USERS_TABLE_NAME || !BANNED_USERS_TABLE_NAME) {
-      return response(500, { message: "Server configuration is incomplete." });
+      return jsonResponse(event, 500, { message: "Server configuration is incomplete." }, "GET,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "GET,OPTIONS");
     }
 
     const body = parseBody(event);
@@ -31,16 +33,16 @@ export const handler = async (
       body?.folderId ?? event.queryStringParameters?.folderId,
     );
     if (!folderId) {
-      return response(400, { message: "folderId is required." });
+      return jsonResponse(event, 400, { message: "folderId is required." }, "GET,OPTIONS");
     }
 
     const users = await fetchUsersForFolder(folderId);
     const bannedUsers = await fetchBannedUsersForFolder(folderId);
-    return response(200, { folderId, users, bannedUsers });
+    return jsonResponse(event, 200, { folderId, users, bannedUsers }, "GET,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to list users.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to list users.", error: message }, "GET,OPTIONS");
   }
 };
 
@@ -187,32 +189,3 @@ function sanitizeFolderId(value?: string) {
   return trimmed;
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "GET,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}

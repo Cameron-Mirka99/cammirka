@@ -34,7 +34,8 @@ If you are only using email/password (no external providers), you can skip this.
 
 In **Amplify Console → App settings → Environment variables** (or Secrets):
 
-- `REACT_APP_PHOTO_API_URL` = your API base URL (e.g. `https://xxxx.execute-api.us-east-1.amazonaws.com/prod`)
+- `NEXT_PUBLIC_PHOTO_API_URL` = your API base URL (e.g. `https://xxxx.execute-api.us-east-1.amazonaws.com/prod`)
+- `NEXT_PUBLIC_COGNITO_USER_POOL_ID`, `NEXT_PUBLIC_COGNITO_CLIENT_ID`, `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID`, `NEXT_PUBLIC_AWS_REGION`, `NEXT_PUBLIC_CLOUDFRONT_DOMAIN` — see `README.md` for where each comes from
 
 After setting these, **trigger a new build**.
 
@@ -106,7 +107,7 @@ npx ampx sandbox --outputs-out-dir src --outputs-format json
 Start the frontend:
 
 ```powershell
-npm start
+npm run dev
 ```
 
 ---
@@ -116,4 +117,3 @@ npm start
 - **No photos returned**: confirm the user has `custom:folderId` and photos exist under that prefix in `my-photo-site-assets`.
 - **Auth errors**: verify `domainPrefix` and callback/logout URLs (if you later add external providers).
 - **API 401**: ensure the frontend is sending a valid Cognito ID token (handled by `authFetch`).
-*** End Patch}"}}

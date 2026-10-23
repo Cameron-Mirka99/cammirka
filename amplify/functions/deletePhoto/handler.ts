@@ -1,5 +1,7 @@
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { getClaims, isAdmin } from "../shared/auth.js";
+import { jsonResponse } from "../shared/response.js";
 import { getManagedPhotoKeysFromStorageKey } from "../shared/photoPaths.js";
 import { deletePhotoTags } from "../shared/tagMetadata.js";
 
@@ -17,24 +19,24 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   try {
     if (!BUCKET_NAME) {
-      return response(500, { message: "BUCKET_NAME is not configured." });
+      return jsonResponse(event, 500, { message: "BUCKET_NAME is not configured." }, "POST,OPTIONS");
     }
 
     const claims = getClaims(event);
     if (!isAdmin(claims)) {
-      return response(403, { message: "Admin access required." });
+      return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
     const body = parseBody(event);
     const key = body?.key?.trim();
 
     if (!key) {
-      return response(400, { message: "key is required." });
+      return jsonResponse(event, 400, { message: "key is required." }, "POST,OPTIONS");
     }
 
     const photo = getManagedPhotoKeysFromStorageKey(key);
     if (!photo) {
-      return response(400, { message: "Invalid key." });
+      return jsonResponse(event, 400, { message: "Invalid key." }, "POST,OPTIONS");
     }
 
     if (photo.isLegacy) {
@@ -44,7 +46,7 @@ export const handler = async (
         tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
         photoKey: photo.canonicalKey,
       });
-      return response(200, { deletedKey: photo.legacyKey, deletedKeys: [photo.legacyKey] });
+      return jsonResponse(event, 200, { deletedKey: photo.legacyKey, deletedKeys: [photo.legacyKey] }, "POST,OPTIONS");
     }
 
     await Promise.all([
@@ -57,14 +59,14 @@ export const handler = async (
       photoKey: photo.canonicalKey,
     });
 
-    return response(200, {
+    return jsonResponse(event, 200, {
       deletedKey: photo.fullKey,
       deletedKeys: [photo.fullKey, photo.thumbnailKey],
-    });
+    }, "POST,OPTIONS");
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return response(500, { message: "Failed to delete photo.", error: message });
+    return jsonResponse(event, 500, { message: "Failed to delete photo.", error: message }, "POST,OPTIONS");
   }
 };
 
@@ -77,35 +79,6 @@ function parseBody(event: APIGatewayProxyEvent) {
   }
 }
 
-function getClaims(event: APIGatewayProxyEvent) {
-  const authorizer = event.requestContext.authorizer as
-    | { claims?: Record<string, string> }
-    | { jwt?: { claims?: Record<string, string> } }
-    | undefined;
-
-  if (authorizer && "claims" in authorizer) return authorizer.claims;
-  if (authorizer && "jwt" in authorizer) return authorizer.jwt?.claims;
-  return undefined;
-}
-
-function isAdmin(claims?: Record<string, string>) {
-  const groups = claims?.["cognito:groups"];
-  if (!groups) return false;
-  return groups.includes("admin");
-}
-
-function response(statusCode: number, body: Record<string, unknown>) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
-    },
-    body: JSON.stringify(body),
-  };
-}
 
 async function deleteObject(key: string) {
   await s3.send(
