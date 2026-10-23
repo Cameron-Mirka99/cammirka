@@ -868,8 +868,13 @@ new AwsCustomResource(processBulkUploadStack, "BulkUploadNotification", {
   policy: AwsCustomResourcePolicy.fromStatements([
     new PolicyStatement({
       actions: [
-        "s3:PutBucketNotificationConfiguration",
-        "s3:GetBucketNotificationConfiguration",
+        // The IAM action names are "PutBucketNotification"/"GetBucketNotification"
+        // -- legacy names that predate the "...Configuration" suffix the S3
+        // API operation itself uses. The deploy fails with AccessDenied if
+        // these are spelled with the "Configuration" suffix, since that's
+        // not an IAM action that actually exists.
+        "s3:PutBucketNotification",
+        "s3:GetBucketNotification",
       ],
       resources: [photoBucket.bucketArn],
     }),
