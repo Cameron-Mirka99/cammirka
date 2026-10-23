@@ -81,6 +81,10 @@ directly in `amplify/`:
   binary) in `uploadImageFunction` (was a no-op stub before — all
   downscaling happened client-side only). Also captures real photo
   width/height at upload time.
+- A "Backfill photo dimensions" action in Admin → Maintenance for photos
+  uploaded before the above existed. Processes a small batch per request
+  (API Gateway has a hard 29s timeout) and the UI loops calls until done —
+  safe to stop and resume, since already-measured photos are skipped.
 - Invites can be rotated (`InvitePanel` → "Rotate") — generates a new code
   and immediately invalidates the old one, instead of one code living
   forever.

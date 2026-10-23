@@ -96,3 +96,22 @@ export async function uploadImage(
   );
   return res.results[0];
 }
+
+export type BackfillDimensionsResult = {
+  totalMissing: number;
+  processed: number;
+  updated: number;
+  failed: number;
+  remaining: number;
+  done: boolean;
+};
+
+/** One batch per call — loop until `done` to backfill every photo. */
+export function backfillPhotoDimensions(
+  batchSize?: number
+): Promise<BackfillDimensionsResult> {
+  return authFetchJson("/backfill-photo-dimensions", {
+    method: "POST",
+    body: JSON.stringify({ batchSize }),
+  });
+}

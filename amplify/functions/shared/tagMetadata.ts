@@ -452,6 +452,43 @@ export async function deletePhotoTags(params: {
   }
 }
 
+/**
+ * Sets width/height for a photo without touching its tags — used by the
+ * dimensions backfill job, which has no tag information to provide and
+ * must not accidentally clear a photo's existing tags.
+ */
+export async function updatePhotoDimensions(params: {
+  photoMetadataTableName?: string;
+  photoKey: string;
+  width: number;
+  height: number;
+}) {
+  const { photoMetadataTableName, photoKey, width, height } = params;
+  if (!photoMetadataTableName || !photoKey) return;
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: photoMetadataTableName,
+      Key: { photoKey },
+    }),
+  );
+  const item = existing.Item as PhotoTagMetadata | undefined;
+
+  await ddb.send(
+    new PutCommand({
+      TableName: photoMetadataTableName,
+      Item: {
+        photoKey,
+        tags: Array.isArray(item?.tags) ? item.tags : [],
+        tagKeys: Array.isArray(item?.tagKeys) ? item.tagKeys : [],
+        width,
+        height,
+        updatedAt: new Date().toISOString(),
+      } satisfies PhotoTagMetadata,
+    }),
+  );
+}
+
 export async function listPhotoKeysForTag(
   tagAssignmentsTableName: string | undefined,
   tag: string,

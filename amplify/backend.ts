@@ -21,6 +21,7 @@ import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
 import { addFolderUser } from "./functions/addFolderUser/resource.js";
 import { backfillFolderUsers } from "./functions/backfillFolderUsers/resource.js";
+import { backfillPhotoDimensions } from "./functions/backfillPhotoDimensions/resource.js";
 import { createFolder } from "./functions/createFolder/resource.js";
 import { createInvite } from "./functions/createInvite/resource.js";
 import { deleteFolder } from "./functions/deleteFolder/resource.js";
@@ -54,6 +55,7 @@ const backend = defineBackend({
   acceptInvite,
   addFolderUser,
   backfillFolderUsers,
+  backfillPhotoDimensions,
   createFolder,
   createInvite,
   deleteFolder,
@@ -83,6 +85,7 @@ const allFunctions = [
   backend.acceptInvite,
   backend.addFolderUser,
   backend.backfillFolderUsers,
+  backend.backfillPhotoDimensions,
   backend.createFolder,
   backend.createInvite,
   backend.deleteFolder,
@@ -334,6 +337,14 @@ backend.backfillFolderUsers.addEnvironment(
   "FOLDER_USERS_TABLE_NAME",
   folderUsersTable.tableName,
 );
+backend.backfillPhotoDimensions.addEnvironment(
+  "BUCKET_NAME",
+  photoBucket.bucketName,
+);
+backend.backfillPhotoDimensions.addEnvironment(
+  "PHOTO_METADATA_TABLE_NAME",
+  photoMetadataTable.tableName,
+);
 backend.listFolderUsers.addEnvironment(
   "USER_POOL_ID",
   backend.auth.resources.userPool.userPoolId,
@@ -418,6 +429,8 @@ invitesTable.grantReadData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.acceptInvite.resources.lambda);
 folderUsersTable.grantReadData(backend.listFolderUsers.resources.lambda);
 folderUsersTable.grantReadWriteData(backend.backfillFolderUsers.resources.lambda);
+photoBucket.grantRead(backend.backfillPhotoDimensions.resources.lambda);
+photoMetadataTable.grantReadWriteData(backend.backfillPhotoDimensions.resources.lambda);
 folderUsersTable.grantReadData(backend.listUserFolders.resources.lambda);
 folderUsersTable.grantReadData(backend.getPhotoDownloadUrl.resources.lambda);
 folderUsersTable.grantReadData(backend.getPhotoList.resources.lambda);
@@ -614,6 +627,15 @@ const backfillFolderUsersIntegration = new LambdaIntegration(
 );
 const backfillFolderUsersResource = restApi.root.addResource("folder-users-backfill");
 backfillFolderUsersResource.addMethod("POST", backfillFolderUsersIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const backfillPhotoDimensionsIntegration = new LambdaIntegration(
+  backend.backfillPhotoDimensions.resources.lambda,
+);
+const backfillPhotoDimensionsResource = restApi.root.addResource("backfill-photo-dimensions");
+backfillPhotoDimensionsResource.addMethod("POST", backfillPhotoDimensionsIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
