@@ -3,7 +3,13 @@ backend:
   phases:
     build:
       commands:
-        - npm ci
+        # npm ci instead of npm install: some of @aws-amplify/backend-cli's
+        # transitive deps (bundled OpenTelemetry copies inside
+        # @aws-amplify/data-construct / graphql-api-construct) carry baked-in
+        # dependency metadata that's internally inconsistent with what npm
+        # actually hoists -- npm ci's stricter lockfile-sync check fails on
+        # that even though a plain install reconciles it fine every time.
+        - npm install
         - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID --outputs-out-dir src --outputs-format json
 # TODO: this frontend phase still assumes the old CRA build (a static
 # `build/` directory). The frontend is now Next.js, whose build output and
@@ -13,7 +19,7 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
+        - npm install
     build:
       commands:
         - npm run build
