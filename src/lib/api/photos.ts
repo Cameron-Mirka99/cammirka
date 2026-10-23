@@ -116,13 +116,20 @@ export type PresignedBulkUpload = {
   finalFileName?: string;
   key?: string;
   uploadUrl?: string;
+  /** Headers the caller must send verbatim on the S3 PUT, or the signature won't match. */
+  headers?: Record<string, string>;
   message?: string;
 };
 
 /** For the external bulk-upload app: a presigned S3 PUT URL per file, no API Gateway payload limit. */
 export function presignBulkUpload(input: {
   folderId: string;
-  files: { fileName: string; contentType: string }[];
+  files: {
+    fileName: string;
+    contentType: string;
+    /** Capture time, epoch ms or ISO string. Optional -- photo order falls back to upload-processing order when omitted or invalid. */
+    takenAt?: string | number;
+  }[];
 }): Promise<{ uploads: PresignedBulkUpload[] }> {
   return authFetchJson("/presign-bulk-upload", {
     method: "POST",

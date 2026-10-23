@@ -19,7 +19,11 @@ const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
 const URL_EXPIRY_SECONDS = 600;
 const MAX_SUFFIX_RETRIES = 5;
 
-type RequestedFile = { fileName?: string; contentType?: string };
+type RequestedFile = { fileName?: string; contentType?: string; takenAt?: string | number };
+
+// Sanity floor for takenAt -- rejects garbage (0, negative, tiny numbers)
+// without needing the caller to get this right. Digital photos didn't exist before this.
+const TAKEN_AT_MIN_MS = Date.UTC(2000, 0, 1);
 
 export const handler = async (
   event: APIGatewayProxyEvent,
@@ -87,17 +91,41 @@ async function presignOne(folderId: string, file: RequestedFile) {
   try {
     const finalFileName = await resolveAvailableFileName(folderId, originalFileName);
     const key = buildBulkStagingKey(folderId, finalFileName);
+
+    // takenAt is best-effort: an invalid or missing value just means the
+    // photo falls back to upload-processing order downstream, never a
+    // failed presign.
+    const takenAtMs = parseTakenAt(file.takenAt);
+    const metadata = takenAtMs !== null ? { "taken-at": String(takenAtMs) } : undefined;
+
     const uploadUrl = await getSignedUrl(
       s3,
-      new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key, ContentType: contentType }),
+      new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key, ContentType: contentType, Metadata: metadata }),
       { expiresIn: URL_EXPIRY_SECONDS },
     );
 
-    return { fileName: originalFileName, finalFileName, key, uploadUrl, ok: true as const };
+    // The PUT signature covers these headers -- the caller must send them
+    // verbatim or S3 will reject the upload with SignatureDoesNotMatch.
+    const headers: Record<string, string> = { "Content-Type": contentType };
+    if (metadata) headers["x-amz-meta-taken-at"] = metadata["taken-at"];
+
+    return { fileName: originalFileName, finalFileName, key, uploadUrl, headers, ok: true as const };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not presign this file.";
     return { fileName: originalFileName, ok: false as const, message };
   }
+}
+
+function parseTakenAt(value: string | number | undefined): number | null {
+  if (value === undefined || value === null) return null;
+  // Accepts an epoch-ms number, a numeric string of one, or an ISO date string.
+  const ms = typeof value === "number"
+    ? value
+    : /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : Date.parse(value);
+  if (!Number.isFinite(ms) || ms < TAKEN_AT_MIN_MS || ms > Date.now()) return null;
+  return Math.trunc(ms);
 }
 
 /**

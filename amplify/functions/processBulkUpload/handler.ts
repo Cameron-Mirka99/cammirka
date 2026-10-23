@@ -49,6 +49,9 @@ async function processOne(key: string) {
   if (!getResult.Body) throw new Error("Empty object body.");
   const bytes = await getResult.Body.transformToByteArray();
   const imageBuffer = Buffer.from(bytes);
+  // Best-effort: missing or malformed metadata just means no takenAt --
+  // never fails processing of the photo itself.
+  const takenAt = parseTakenAtMetadata(getResult.Metadata?.["taken-at"]);
 
   const contentType = getResult.ContentType || guessContentType(fileName) || "application/octet-stream";
   const dimensions = await readDimensions(imageBuffer);
@@ -77,9 +80,15 @@ async function processOne(key: string) {
     tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
     photoKey: canonicalKey,
     tags: [],
-    attributes: { ...dimensions, category: "bulk" },
+    attributes: { ...dimensions, category: "bulk", takenAt: takenAt ?? undefined },
   });
 
   // Only reached once full+thumb+metadata have all succeeded.
   await s3.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+}
+
+function parseTakenAtMetadata(value: string | undefined): number | null {
+  if (!value) return null;
+  const ms = Number(value);
+  return Number.isFinite(ms) ? ms : null;
 }

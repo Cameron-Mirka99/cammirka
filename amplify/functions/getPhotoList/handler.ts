@@ -221,9 +221,10 @@ export const handler = async (
 
     // category/likedOnly need metadata for the FULL candidate set before
     // sampling/limiting, not just the post-sample set -- otherwise a random
-    // 200-item sample could filter down to near-nothing. Only pay this extra
-    // BatchGetItem cost when a caller actually asks for these filters.
-    const needsFullMetadata = Boolean(requestedCategory) || likedOnly;
+    // 200-item sample could filter down to near-nothing. sort=newest also
+    // needs it, since takenAt (when present) ranks ahead of S3 lastModified.
+    // Only pay this extra BatchGetItem cost when a caller actually needs it.
+    const needsFullMetadata = Boolean(requestedCategory) || likedOnly || sortNewest;
     let photoMeta: Awaited<ReturnType<typeof getPhotoMetadataMap>> | undefined;
 
     if (needsFullMetadata) {
@@ -240,7 +241,7 @@ export const handler = async (
     }
 
     const selectedPhotos = sortNewest
-      ? sortByNewest(eligiblePhotos).slice(0, limit)
+      ? sortByNewest(eligiblePhotos, photoMeta!).slice(0, limit)
       : samplePhotos(eligiblePhotos, limit);
     const baseUrl = `https://${CLOUDFRONT_DOMAIN.replace(/\/+$/, "")}`;
     if (!needsFullMetadata) {
@@ -297,10 +298,16 @@ function samplePhotos<T>(items: T[], limit: number) {
   return shuffled.slice(0, limit);
 }
 
-function sortByNewest(items: ListedPhoto[]) {
-  return [...items].sort((a, b) => {
-    const aTime = a.lastModified?.getTime() ?? 0;
-    const bTime = b.lastModified?.getTime() ?? 0;
-    return bTime - aTime;
-  });
+// Prefers each photo's own capture time (takenAt, from client-supplied EXIF/
+// file metadata at bulk-upload time) over S3 lastModified, since concurrent
+// upload/processing can finish out of shoot order. Falls back to
+// lastModified per-photo when takenAt is missing -- never fails the sort.
+function sortByNewest(
+  items: ListedPhoto[],
+  photoMeta: Map<string, { takenAt?: number }>,
+) {
+  const sortKey = (item: ListedPhoto) =>
+    photoMeta.get(item.canonicalKey)?.takenAt ?? item.lastModified?.getTime() ?? 0;
+
+  return [...items].sort((a, b) => sortKey(b) - sortKey(a));
 }

@@ -147,6 +147,21 @@ export default function MyPhotosPage() {
 
   const handleToggleLike = async (photo: Photo) => {
     if (!selectedFolderId) return;
+
+    // Fast-path client check -- avoids the optimistic-flip-then-rollback
+    // flicker when we already know the limit is hit. The backend's
+    // conditional transact-write stays the real enforcement: this count can
+    // be stale (another tab, another like just landed), so it only ever
+    // blocks early, never substitutes for the server's own check.
+    if (
+      !photo.liked &&
+      typeof selectedFolder?.likeLimit === "number" &&
+      (selectedFolder.likedCount ?? 0) >= selectedFolder.likeLimit
+    ) {
+      showLikeNotice("Like limit reached — unlike one to pick another.", "limit");
+      return;
+    }
+
     const previousPhotos = photos;
     const previousFolders = folders;
     const delta = photo.liked ? -1 : 1;
@@ -237,23 +252,31 @@ export default function MyPhotosPage() {
                 <TabButton active={tab === "final"} label="Final" onClick={() => setTab("final")} />
               </div>
               {tab === "bulk" && (
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm text-muted">
-                  {typeof selectedFolder?.likeLimit === "number" && (
-                    <span>
-                      {selectedFolder.likedCount ?? 0} of {selectedFolder.likeLimit} liked
-                    </span>
-                  )}
-                  <button
-                    onClick={() => setLikedOnly((v) => !v)}
-                    className={clsx(
-                      "rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition-colors",
-                      likedOnly
-                        ? "border-accent bg-accent text-white"
-                        : "border-border hover:bg-surface"
+                <div className="mt-4 flex flex-col items-center gap-3 text-sm text-muted">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    {typeof selectedFolder?.likeLimit === "number" && (
+                      <span>
+                        {selectedFolder.likedCount ?? 0} of {selectedFolder.likeLimit} liked
+                      </span>
                     )}
-                  >
-                    Liked only
-                  </button>
+                    <button
+                      onClick={() => setLikedOnly((v) => !v)}
+                      className={clsx(
+                        "rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition-colors",
+                        likedOnly
+                          ? "border-accent bg-accent text-white"
+                          : "border-border hover:bg-surface"
+                      )}
+                    >
+                      Liked only
+                    </button>
+                  </div>
+                  <p className="text-xs">
+                    Photos are newest first, filling top to bottom one column
+                    before starting the next — so the photo beside one you&apos;re
+                    looking at isn&apos;t necessarily the next shot. Check the one
+                    below it instead.
+                  </p>
                 </div>
               )}
             </div>

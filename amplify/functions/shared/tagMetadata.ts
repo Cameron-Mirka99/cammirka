@@ -23,6 +23,7 @@ export type PhotoTagMetadata = {
   height?: number;
   category?: PhotoCategory;
   liked?: boolean;
+  takenAt?: number;
   updatedAt: string;
 };
 
@@ -76,6 +77,7 @@ export type PhotoAttributes = {
   height?: number;
   category: PhotoCategory;
   liked: boolean;
+  takenAt?: number;
 };
 
 export async function getPhotoMetadataMap(
@@ -111,6 +113,7 @@ export async function getPhotoMetadataMap(
         // -- treat it as an already-delivered final, never as bulk.
         category: item.category === "bulk" ? "bulk" : "final",
         liked: item.liked === true,
+        takenAt: typeof item.takenAt === "number" ? item.takenAt : undefined,
       });
     }
   }
@@ -185,7 +188,7 @@ export async function syncPhotoTags(params: {
   tagAssignmentsTableName?: string;
   photoKey: string;
   tags: string[];
-  attributes?: { width?: number; height?: number; category?: PhotoCategory };
+  attributes?: { width?: number; height?: number; category?: PhotoCategory; takenAt?: number };
 }) {
   const {
     photoMetadataTableName,
@@ -231,6 +234,7 @@ export async function syncPhotoTags(params: {
   const height = attributes?.height ?? previousItem?.height;
   const category = attributes?.category ?? previousItem?.category;
   const liked = previousItem?.liked;
+  const takenAt = attributes?.takenAt ?? previousItem?.takenAt;
   await ddb.send(
     new PutCommand({
       TableName: photoMetadataTableName,
@@ -242,6 +246,7 @@ export async function syncPhotoTags(params: {
         ...(height !== undefined ? { height } : {}),
         ...(category !== undefined ? { category } : {}),
         ...(liked !== undefined ? { liked } : {}),
+        ...(takenAt !== undefined ? { takenAt } : {}),
         updatedAt: now,
       } satisfies PhotoTagMetadata,
     }),
@@ -407,7 +412,7 @@ export async function copyPhotoTags(params: {
     tags: sourceTags,
     // liked is deliberately not carried over -- a copy is a new photo, not
     // a continuation of the client's prior like decision on the original.
-    attributes: { width: item?.width, height: item?.height, category: item?.category },
+    attributes: { width: item?.width, height: item?.height, category: item?.category, takenAt: item?.takenAt },
   });
 }
 
@@ -503,6 +508,7 @@ export async function updatePhotoDimensions(params: {
         height,
         ...(item?.category !== undefined ? { category: item.category } : {}),
         ...(item?.liked !== undefined ? { liked: item.liked } : {}),
+        ...(item?.takenAt !== undefined ? { takenAt: item.takenAt } : {}),
         updatedAt: new Date().toISOString(),
       } satisfies PhotoTagMetadata,
     }),
