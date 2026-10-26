@@ -169,3 +169,8 @@ export function backfillPhotoDimensions(
     body: JSON.stringify({ batchSize }),
   });
 }
+
+/** Fires retentionSweep asynchronously; results land in its CloudWatch logs, not here. */
+export function triggerRetentionSweep(): Promise<{ message: string }> {
+  return authFetchJson("/retention-sweep", { method: "POST" });
+}

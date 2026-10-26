@@ -2,7 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useBackfillFolderUsers } from "@/lib/query/useAdminFolderUsers";
-import { backfillPhotoDimensions, fetchStuckBulkUploads, type StuckBulkUpload } from "@/lib/api/photos";
+import {
+  backfillPhotoDimensions,
+  fetchStuckBulkUploads,
+  triggerRetentionSweep,
+  type StuckBulkUpload,
+} from "@/lib/api/photos";
 
 type DimensionsProgress = {
   updated: number;
@@ -23,6 +28,23 @@ export default function MaintenancePage() {
   const [stuckUploads, setStuckUploads] = useState<StuckBulkUpload[] | null>(null);
   const [stuckLoading, setStuckLoading] = useState(false);
   const [stuckError, setStuckError] = useState<string | null>(null);
+
+  const [sweepRunning, setSweepRunning] = useState(false);
+  const [sweepMessage, setSweepMessage] = useState<string | null>(null);
+  const [sweepError, setSweepError] = useState<string | null>(null);
+
+  const runRetentionSweep = async () => {
+    setSweepRunning(true);
+    setSweepError(null);
+    try {
+      const res = await triggerRetentionSweep();
+      setSweepMessage(res.message);
+    } catch (err) {
+      setSweepError(err instanceof Error ? err.message : "Could not trigger retention sweep.");
+    } finally {
+      setSweepRunning(false);
+    }
+  };
 
   const checkStuckUploads = async () => {
     setStuckLoading(true);
@@ -165,6 +187,26 @@ export default function MaintenancePage() {
             </ul>
           )
         )}
+      </section>
+
+      <section className="rounded-lg border border-border p-5">
+        <h2 className="text-sm font-medium">Retention sweep</h2>
+        <p className="mt-1 text-sm text-muted">
+          Normally runs daily at 9:00 UTC. Deletes bulk-review photos past a
+          folder&apos;s configured retention. Runs asynchronously — this just
+          fires it; check CloudWatch logs (function: retentionSweep) for
+          what it found/deleted. DRY_RUN is currently on, so nothing is
+          actually deleted until that&apos;s flipped off.
+        </p>
+        <button
+          onClick={runRetentionSweep}
+          disabled={sweepRunning}
+          className="mt-4 rounded-full bg-accent px-5 py-1.5 text-sm text-white disabled:opacity-50"
+        >
+          {sweepRunning ? "Triggering…" : "Run now"}
+        </button>
+        {sweepError && <p className="mt-3 text-sm text-red-500">{sweepError}</p>}
+        {sweepMessage && <p className="mt-3 text-sm text-muted">{sweepMessage}</p>}
       </section>
     </div>
   );

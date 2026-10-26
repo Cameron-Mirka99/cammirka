@@ -21,10 +21,6 @@ const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 // least one logged run's output in CloudWatch.
 const DRY_RUN = process.env.DRY_RUN !== "false";
 
-// Hard floor independent of whatever bulkRetentionDays an admin configured --
-// protects against a fat-fingered 0/1 wiping a folder's just-uploaded bulk
-// photos on the very next scheduled run.
-const MIN_AGE_DAYS = 3;
 const DAY_MS = 86_400_000;
 
 type FolderItem = {
@@ -54,7 +50,7 @@ export const handler = async (): Promise<void> => {
   let errors = 0;
 
   for (const folder of folders) {
-    const retentionMs = Math.max(folder.bulkRetentionDays ?? 0, MIN_AGE_DAYS) * DAY_MS;
+    const retentionMs = (folder.bulkRetentionDays ?? 0) * DAY_MS;
 
     try {
       const candidates = await listFolderPhotos(folder.folderId);

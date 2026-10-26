@@ -54,6 +54,7 @@ import { publicPhotos } from "./functions/publicPhotos/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { retentionSweep } from "./functions/retentionSweep/resource.js";
 import { toggleLike } from "./functions/toggleLike/resource.js";
+import { triggerRetentionSweep } from "./functions/triggerRetentionSweep/resource.js";
 import { unbanFolderUser } from "./functions/unbanFolderUser/resource.js";
 import { updateFolder } from "./functions/updateFolder/resource.js";
 import { updatePhotoTags } from "./functions/updatePhotoTags/resource.js";
@@ -97,6 +98,7 @@ const backend = defineBackend({
   removeFolderUser,
   retentionSweep,
   toggleLike,
+  triggerRetentionSweep,
   unbanFolderUser,
   updateFolder,
   updatePhotoTags,
@@ -131,6 +133,7 @@ const allFunctions = [
   backend.publicPhotos,
   backend.removeFolderUser,
   backend.toggleLike,
+  backend.triggerRetentionSweep,
   backend.unbanFolderUser,
   backend.updateFolder,
   backend.updatePhotoTags,
@@ -139,7 +142,8 @@ const allFunctions = [
   backend.uploadImageFunction,
   // retentionSweep and processBulkUpload are deliberately excluded: both
   // are event-triggered (EventBridge / S3), never return an API Gateway
-  // response, so neither has CORS to configure.
+  // response, so neither has CORS to configure. triggerRetentionSweep is
+  // the API-facing route that fires retentionSweep asynchronously instead.
 ];
 for (const fn of allFunctions) {
   fn.addEnvironment("ALLOWED_ORIGINS", ALLOWED_ORIGINS.join(","));
@@ -342,6 +346,11 @@ backend.retentionSweep.addEnvironment(
 // Logs every deletion candidate without deleting anything. Flip to "false"
 // only after reviewing at least one real scheduled run's CloudWatch output.
 backend.retentionSweep.addEnvironment("DRY_RUN", "true");
+backend.triggerRetentionSweep.addEnvironment(
+  "RETENTION_SWEEP_FUNCTION_NAME",
+  backend.retentionSweep.resources.lambda.functionName,
+);
+backend.retentionSweep.resources.lambda.grantInvoke(backend.triggerRetentionSweep.resources.lambda);
 backend.presignBulkUpload.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 backend.presignBulkUpload.addEnvironment("FOLDERS_TABLE_NAME", foldersTable.tableName);
 backend.processBulkUpload.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
@@ -685,6 +694,13 @@ presignBulkUploadResource.addMethod("POST", presignBulkUploadIntegration, {
 const listStuckBulkUploadsIntegration = new LambdaIntegration(backend.listStuckBulkUploads.resources.lambda);
 const stuckBulkUploadsResource = restApi.root.addResource("stuck-bulk-uploads");
 stuckBulkUploadsResource.addMethod("GET", listStuckBulkUploadsIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const triggerRetentionSweepIntegration = new LambdaIntegration(backend.triggerRetentionSweep.resources.lambda);
+const retentionSweepResource = restApi.root.addResource("retention-sweep");
+retentionSweepResource.addMethod("POST", triggerRetentionSweepIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });
