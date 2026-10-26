@@ -5,8 +5,10 @@ import {
   CognitoUserPoolsAuthorizer,
   Cors,
   LambdaIntegration,
+  MethodLoggingLevel,
   RestApi,
 } from "aws-cdk-lib/aws-apigateway";
+import { CfnBudget } from "aws-cdk-lib/aws-budgets";
 import { Distribution, OriginAccessIdentity } from "aws-cdk-lib/aws-cloudfront";
 import { S3Origin } from "aws-cdk-lib/aws-cloudfront-origins";
 import {
@@ -19,11 +21,14 @@ import { Rule, Schedule } from "aws-cdk-lib/aws-events";
 import { LambdaFunction } from "aws-cdk-lib/aws-events-targets";
 import { PolicyStatement, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { Bucket } from "aws-cdk-lib/aws-s3";
+import { Topic } from "aws-cdk-lib/aws-sns";
+import { EmailSubscription } from "aws-cdk-lib/aws-sns-subscriptions";
 import {
   AwsCustomResource,
   AwsCustomResourcePolicy,
   PhysicalResourceId,
 } from "aws-cdk-lib/custom-resources";
+import { CfnWebACL, CfnWebACLAssociation } from "aws-cdk-lib/aws-wafv2";
 import { auth } from "./auth/resource.js";
 import { acceptInvite } from "./functions/acceptInvite/resource.js";
 import { addFolderUser } from "./functions/addFolderUser/resource.js";
@@ -581,6 +586,15 @@ const restApi = new RestApi(apiStack, "PhotoApi", {
     allowOrigins: ALLOWED_ORIGINS,
     allowMethods: Cors.ALL_METHODS,
   },
+  // Stage-wide throttle: a hard ceiling on the whole API regardless of
+  // source, independent of the WAF rate rule below (which throttles per
+  // IP). Burst absorbs normal multi-tab/gallery-scroll request bunching;
+  // steady-state rate is well above real traffic but far below abuse.
+  deployOptions: {
+    throttlingRateLimit: 50,
+    throttlingBurstLimit: 100,
+    loggingLevel: MethodLoggingLevel.ERROR,
+  },
 });
 
 const authorizer = new CognitoUserPoolsAuthorizer(
@@ -884,6 +898,90 @@ new AwsCustomResource(processBulkUploadStack, "BulkUploadNotification", {
       resources: [photoBucket.bucketArn],
     }),
   ]),
+});
+
+// WAF: per-IP rate limit in front of the whole API, including the
+// unauthenticated /public-photos and /tags routes that stage throttling
+// alone can't protect from a single attacker (one IP can still burn
+// through the account-wide throttle above). REGIONAL scope is required
+// for API Gateway (CLOUDFRONT scope only attaches to CloudFront/Amplify
+// Hosting distributions).
+const apiRateLimitAcl = new CfnWebACL(apiStack, "PhotoApiRateLimitAcl", {
+  scope: "REGIONAL",
+  defaultAction: { allow: {} },
+  visibilityConfig: {
+    cloudWatchMetricsEnabled: true,
+    metricName: "PhotoApiRateLimitAcl",
+    sampledRequestsEnabled: true,
+  },
+  rules: [
+    {
+      name: "RateLimitPerIp",
+      priority: 0,
+      action: { block: {} },
+      statement: {
+        rateBasedStatement: {
+          // Requests per 5-minute window per source IP.
+          limit: 300,
+          aggregateKeyType: "IP",
+        },
+      },
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: "RateLimitPerIp",
+        sampledRequestsEnabled: true,
+      },
+    },
+  ],
+});
+
+new CfnWebACLAssociation(apiStack, "PhotoApiRateLimitAclAssociation", {
+  resourceArn: restApi.deploymentStage.stageArn,
+  webAclArn: apiRateLimitAcl.attrArn,
+});
+
+// Budget alarm: the actual dollar-amount circuit breaker, independent of
+// whether an attack is clever enough to dodge the WAF rule or stage
+// throttle above. Fires on both a mid-month warning and an over-budget
+// alert so there's lead time before the second one.
+const budgetAlertTopic = new Topic(infraStack, "BudgetAlertTopic");
+budgetAlertTopic.addSubscription(new EmailSubscription("cambony1@gmail.com"));
+
+new CfnBudget(infraStack, "MonthlyCostBudget", {
+  budget: {
+    budgetType: "COST",
+    timeUnit: "MONTHLY",
+    budgetLimit: { amount: 25, unit: "USD" },
+  },
+  notificationsWithSubscribers: [
+    {
+      notification: {
+        notificationType: "ACTUAL",
+        comparisonOperator: "GREATER_THAN",
+        threshold: 80,
+        thresholdType: "PERCENTAGE",
+      },
+      subscribers: [{ subscriptionType: "EMAIL", address: "cambony1@gmail.com" }],
+    },
+    {
+      notification: {
+        notificationType: "ACTUAL",
+        comparisonOperator: "GREATER_THAN",
+        threshold: 100,
+        thresholdType: "PERCENTAGE",
+      },
+      subscribers: [{ subscriptionType: "EMAIL", address: "cambony1@gmail.com" }],
+    },
+    {
+      notification: {
+        notificationType: "FORECASTED",
+        comparisonOperator: "GREATER_THAN",
+        threshold: 100,
+        thresholdType: "PERCENTAGE",
+      },
+      subscribers: [{ subscriptionType: "EMAIL", address: "cambony1@gmail.com" }],
+    },
+  ],
 });
 
 backend.addOutput({
