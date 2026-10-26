@@ -343,9 +343,9 @@ backend.retentionSweep.addEnvironment(
   "TAG_ASSIGNMENTS_TABLE_NAME",
   tagAssignmentsTable.tableName,
 );
-// Logs every deletion candidate without deleting anything. Flip to "false"
-// only after reviewing at least one real scheduled run's CloudWatch output.
-backend.retentionSweep.addEnvironment("DRY_RUN", "true");
+// Flipped off after reviewing dry-run CloudWatch output confirmed correct
+// candidates. Real deletes now happen on every scheduled/triggered run.
+backend.retentionSweep.addEnvironment("DRY_RUN", "false");
 backend.triggerRetentionSweep.addEnvironment(
   "RETENTION_SWEEP_FUNCTION_NAME",
   backend.retentionSweep.resources.lambda.functionName,
