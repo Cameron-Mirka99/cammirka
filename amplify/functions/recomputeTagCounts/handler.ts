@@ -29,46 +29,8 @@ export const handler = async (
       return jsonResponse(event, 403, { message: "Admin access required." }, "POST,OPTIONS");
     }
 
-    const counts = new Map<string, number>();
-    let totalAssignments = 0;
-    let exclusiveStartKey: Record<string, unknown> | undefined;
-
-    do {
-      const response = await ddb.send(
-        new ScanCommand({
-          TableName: TAG_ASSIGNMENTS_TABLE_NAME,
-          ProjectionExpression: "tagKey",
-          ExclusiveStartKey: exclusiveStartKey,
-        }),
-      );
-
-      for (const item of response.Items ?? []) {
-        const tagKey = typeof item.tagKey === "string" ? item.tagKey : undefined;
-        if (!tagKey) continue;
-        counts.set(tagKey, (counts.get(tagKey) ?? 0) + 1);
-        totalAssignments += 1;
-      }
-
-      exclusiveStartKey = response.LastEvaluatedKey;
-    } while (exclusiveStartKey);
-
-    const tagKeys: string[] = [];
-    exclusiveStartKey = undefined;
-    do {
-      const response = await ddb.send(
-        new ScanCommand({
-          TableName: TAG_CATALOG_TABLE_NAME,
-          ProjectionExpression: "tagKey",
-          ExclusiveStartKey: exclusiveStartKey,
-        }),
-      );
-
-      for (const item of response.Items ?? []) {
-        if (typeof item.tagKey === "string") tagKeys.push(item.tagKey);
-      }
-
-      exclusiveStartKey = response.LastEvaluatedKey;
-    } while (exclusiveStartKey);
+    const { counts, totalAssignments } = await scanAssignmentCounts(TAG_ASSIGNMENTS_TABLE_NAME);
+    const tagKeys = await scanCatalogTagKeys(TAG_CATALOG_TABLE_NAME);
 
     // Every catalog tag gets an explicit count, including 0 for tags with
     // no current assignments -- a missing row here would just mean "still
@@ -99,3 +61,53 @@ export const handler = async (
     return jsonResponse(event, 500, { message: "Failed to recompute tag counts.", error: message }, "POST,OPTIONS");
   }
 };
+
+async function scanAssignmentCounts(tableName: string) {
+  const counts = new Map<string, number>();
+  let totalAssignments = 0;
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+
+  do {
+    const response = await ddb.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: "tagKey",
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+
+    for (const item of response.Items ?? []) {
+      const tagKey = typeof item.tagKey === "string" ? item.tagKey : undefined;
+      if (!tagKey) continue;
+      counts.set(tagKey, (counts.get(tagKey) ?? 0) + 1);
+      totalAssignments += 1;
+    }
+
+    exclusiveStartKey = response.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+
+  return { counts, totalAssignments };
+}
+
+async function scanCatalogTagKeys(tableName: string) {
+  const tagKeys: string[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+
+  do {
+    const response = await ddb.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: "tagKey",
+        ExclusiveStartKey: exclusiveStartKey,
+      }),
+    );
+
+    for (const item of response.Items ?? []) {
+      if (typeof item.tagKey === "string") tagKeys.push(item.tagKey);
+    }
+
+    exclusiveStartKey = response.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+
+  return tagKeys;
+}
