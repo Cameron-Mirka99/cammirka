@@ -35,6 +35,19 @@ export function updatePhotoTags(input: {
   });
 }
 
+/**
+ * One-off/occasional maintenance action: retallies every tag's stored
+ * usage count from the tagAssignments table. Needed once to seed counts
+ * for tags that existed before the counter was introduced, and safe to
+ * re-run any time to correct any drift.
+ */
+export function recomputeTagCounts(): Promise<{
+  tagsUpdated: number;
+  totalAssignments: number;
+}> {
+  return authFetchJson("/recompute-tag-counts", { method: "POST" });
+}
+
 export type BatchTagResult = {
   photoKey: string;
   tags: string[];

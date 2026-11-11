@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -39,7 +39,12 @@ function ArchiveContent() {
   const tag = searchParams.get("tag") ?? undefined;
 
   const { data: newestPhotos = [] } = useNewestPhotos(tag);
-  const newestKeys = newestPhotos.map((p) => p.key);
+  // A partial page means this tag has too few photos overall to justify a
+  // separate Newest strip — hiding it keeps those photos in the main grid
+  // instead of stranding them in an almost-empty section.
+  const [forceHideNewest, setForceHideNewest] = useState(false);
+  const showNewest = newestPhotos.length === NEWEST_COUNT && !forceHideNewest;
+  const newestKeys = showNewest ? newestPhotos.map((p) => p.key) : [];
   const [selectedNewestIndex, setSelectedNewestIndex] = useState<number | null>(null);
 
   const { photos, loading, loadingMore, hasMore, loadMore } = usePhotoFeed(
@@ -47,6 +52,18 @@ function ArchiveContent() {
     tag,
     newestKeys
   );
+
+  // Reset the override on tag change, then catch the remaining edge case: a
+  // full Newest page (exactly NEWEST_COUNT total photos) that still leaves
+  // the main grid empty.
+  useEffect(() => {
+    setForceHideNewest(false);
+  }, [tag]);
+  useEffect(() => {
+    if (!loading && showNewest && photos.length === 0 && !hasMore) {
+      setForceHideNewest(true);
+    }
+  }, [loading, showNewest, photos.length, hasMore]);
   const { mainTags, secondaryTags } = useSecondaryTags();
 
   const applyTag = (next?: string) => {
@@ -79,7 +96,7 @@ function ArchiveContent() {
         <MoreTagsMenu tags={secondaryTags} activeTag={tag} onSelect={applyTag} />
       </div>
 
-      {newestPhotos.length > 0 && (
+      {showNewest && (
         <section className="mb-14">
           <h2 className="mb-4 font-serif text-xl italic text-foreground">
             Newest

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAdminFolders, useDeleteFolder } from "@/lib/query/useAdminFolders";
 import { InvitePanel } from "./InvitePanel";
@@ -17,7 +17,12 @@ export default function FolderDetailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const folder = folders?.find((f) => f.folderId === folderId);
-  const isPublic = folderId === "public";
+
+  // The public gallery now has its own dedicated page.
+  useEffect(() => {
+    if (folderId === "public") router.replace("/admin/archive");
+  }, [folderId, router]);
+  if (folderId === "public") return null;
 
   const handleDelete = () => {
     deleteFolder.mutate(folderId, { onSuccess: () => router.replace("/admin") });
@@ -32,43 +37,39 @@ export default function FolderDetailPage() {
           </h1>
           <p className="mt-1 text-sm text-muted">{folderId}</p>
         </div>
-        {!isPublic && (
-          <div>
-            {confirmingDelete ? (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted">Delete this folder and all its photos?</span>
-                <button
-                  onClick={handleDelete}
-                  className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => setConfirmingDelete(false)}
-                  className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
+        <div>
+          {confirmingDelete ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted">Delete this folder and all its photos?</span>
               <button
-                onClick={() => setConfirmingDelete(true)}
+                onClick={handleDelete}
                 className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
               >
-                Delete folder
+                Confirm
               </button>
-            )}
-          </div>
-        )}
+              <button
+                onClick={() => setConfirmingDelete(false)}
+                className="rounded-full border border-border px-3 py-1 text-xs uppercase tracking-wide text-muted transition-colors hover:bg-surface"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="rounded-full border border-red-500 px-3 py-1 text-xs uppercase tracking-wide text-red-500 transition-colors hover:bg-red-500 hover:text-white"
+            >
+              Delete folder
+            </button>
+          )}
+        </div>
       </div>
 
-      {!isPublic && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <InvitePanel folderId={folderId} />
-          <AccessPanel folderId={folderId} />
-          <LikeSettingsPanel folderId={folderId} />
-        </div>
-      )}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <InvitePanel folderId={folderId} />
+        <AccessPanel folderId={folderId} />
+        <LikeSettingsPanel folderId={folderId} />
+      </div>
 
       <PhotoLibrary folderId={folderId} />
     </div>

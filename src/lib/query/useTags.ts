@@ -18,6 +18,16 @@ export function useHomeTags() {
   return { homeTags, ...rest };
 }
 
+/** Tag labels for autocomplete, most-used sitewide first. */
+export function usePopularTagLabels() {
+  const { data, ...rest } = usePublicTags();
+  const labels = (data ?? [])
+    .slice()
+    .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label))
+    .map((tag) => tag.label);
+  return { labels, ...rest };
+}
+
 export function useSecondaryTags() {
   const { data, ...rest } = usePublicTags();
   const mainTags = (data ?? [])

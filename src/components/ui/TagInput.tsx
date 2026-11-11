@@ -12,6 +12,7 @@ type TagInputProps = {
 
 export function TagInput({ value, onChange, placeholder, suggestions = [] }: TagInputProps) {
   const [draft, setDraft] = useState("");
+  const [focused, setFocused] = useState(false);
 
   const commit = (raw: string) => {
     const trimmed = raw.trim();
@@ -24,12 +25,16 @@ export function TagInput({ value, onChange, placeholder, suggestions = [] }: Tag
     onChange(value.filter((t) => buildTagKey(t) !== buildTagKey(tag)));
   };
 
+  // suggestions arrives pre-sorted most-common-first; filtering preserves
+  // that order, so an empty draft shows the site's top tags and a typed
+  // draft narrows to the most-common tags that match it.
+  const query = draft.trim().toLowerCase();
   const matches = suggestions.filter(
     (s) =>
-      draft &&
-      s.toLowerCase().includes(draft.toLowerCase()) &&
+      (!query || s.toLowerCase().includes(query)) &&
       !value.some((v) => buildTagKey(v) === buildTagKey(s))
   );
+  const showMatches = focused && matches.length > 0;
 
   return (
     <div className="relative">
@@ -48,6 +53,8 @@ export function TagInput({ value, onChange, placeholder, suggestions = [] }: Tag
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === ",") {
               e.preventDefault();
@@ -60,9 +67,12 @@ export function TagInput({ value, onChange, placeholder, suggestions = [] }: Tag
           className="min-w-24 flex-1 bg-transparent text-sm outline-none"
         />
       </div>
-      {matches.length > 0 && (
-        <ul className="absolute z-10 mt-1 w-full rounded-md border border-border bg-surface shadow-lg">
-          {matches.slice(0, 6).map((m) => (
+      {showMatches && (
+        <ul
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute z-10 mt-1 w-full rounded-md border border-border bg-surface shadow-lg"
+        >
+          {matches.slice(0, 8).map((m) => (
             <li key={m}>
               <button
                 onClick={() => commit(m)}

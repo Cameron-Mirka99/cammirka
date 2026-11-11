@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
 const sections = [
+  { href: "/admin/archive", label: "Archive" },
   { href: "/admin", label: "Folders" },
   { href: "/admin/upload", label: "Upload" },
   { href: "/admin/users", label: "Users" },

@@ -22,6 +22,7 @@ const FOLDER_USERS_TABLE_NAME = process.env.FOLDER_USERS_TABLE_NAME;
 const BANNED_USERS_TABLE_NAME = process.env.BANNED_USERS_TABLE_NAME;
 const INVITES_TABLE_NAME = process.env.INVITES_TABLE_NAME;
 const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
 const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 
 const s3 = new S3Client({ region: process.env.AWS_REGION });
@@ -58,6 +59,7 @@ export const handler = async (
     for (const photoKey of photoKeys) {
       await deletePhotoTags({
         photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+        tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
         tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
         photoKey,
       });

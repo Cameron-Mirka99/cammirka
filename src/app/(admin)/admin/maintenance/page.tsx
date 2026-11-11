@@ -8,6 +8,7 @@ import {
   triggerRetentionSweep,
   type StuckBulkUpload,
 } from "@/lib/api/photos";
+import { recomputeTagCounts } from "@/lib/api/tags";
 
 type DimensionsProgress = {
   updated: number;
@@ -33,6 +34,13 @@ export default function MaintenancePage() {
   const [sweepMessage, setSweepMessage] = useState<string | null>(null);
   const [sweepError, setSweepError] = useState<string | null>(null);
 
+  const [tagCountsRunning, setTagCountsRunning] = useState(false);
+  const [tagCountsResult, setTagCountsResult] = useState<{
+    tagsUpdated: number;
+    totalAssignments: number;
+  } | null>(null);
+  const [tagCountsError, setTagCountsError] = useState<string | null>(null);
+
   const runRetentionSweep = async () => {
     setSweepRunning(true);
     setSweepError(null);
@@ -43,6 +51,19 @@ export default function MaintenancePage() {
       setSweepError(err instanceof Error ? err.message : "Could not trigger retention sweep.");
     } finally {
       setSweepRunning(false);
+    }
+  };
+
+  const runRecomputeTagCounts = async () => {
+    setTagCountsRunning(true);
+    setTagCountsError(null);
+    try {
+      const res = await recomputeTagCounts();
+      setTagCountsResult(res);
+    } catch (err) {
+      setTagCountsError(err instanceof Error ? err.message : "Could not recompute tag counts.");
+    } finally {
+      setTagCountsRunning(false);
     }
   };
 
@@ -148,6 +169,33 @@ export default function MaintenancePage() {
             {dimensionsProgress.remaining > 0
               ? `${dimensionsProgress.remaining} of ${dimensionsProgress.totalMissing} remaining`
               : "all done"}
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-border p-5">
+        <h2 className="text-sm font-medium">Recompute tag counts</h2>
+        <p className="mt-1 text-sm text-muted">
+          Tag suggestions are ordered by how many photos carry each tag, kept
+          as a running counter rather than counted live. Run this once to
+          seed counts for tags that existed before that counter was added,
+          or any time you suspect drift — it retallies every tag from
+          scratch off the actual photo-tag assignments.
+        </p>
+        <button
+          onClick={runRecomputeTagCounts}
+          disabled={tagCountsRunning}
+          className="mt-4 rounded-full bg-accent px-5 py-1.5 text-sm text-white disabled:opacity-50"
+        >
+          {tagCountsRunning ? "Recomputing…" : "Recompute now"}
+        </button>
+        {tagCountsError && <p className="mt-3 text-sm text-red-500">{tagCountsError}</p>}
+        {tagCountsResult && (
+          <p className="mt-3 text-sm text-muted">
+            Updated {tagCountsResult.tagsUpdated} tag
+            {tagCountsResult.tagsUpdated === 1 ? "" : "s"} from{" "}
+            {tagCountsResult.totalAssignments} photo-tag assignment
+            {tagCountsResult.totalAssignments === 1 ? "" : "s"}.
           </p>
         )}
       </section>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAdminFolders } from "@/lib/query/useAdminFolders";
-import { usePublicTags } from "@/lib/query/useTags";
+import { usePopularTagLabels } from "@/lib/query/useTags";
 import {
   useAdminFolderPhotos,
   useDeletePhotoMutation,
@@ -21,7 +21,7 @@ const PAGE_SIZE = 10;
 
 export function PhotoLibrary({ folderId }: { folderId: string }) {
   const { data: photos, isLoading } = useAdminFolderPhotos(folderId);
-  const { data: allTags } = usePublicTags();
+  const { labels: tagSuggestions } = usePopularTagLabels();
   const { data: allFolders } = useAdminFolders();
 
   const deletePhoto = useDeletePhotoMutation(folderId);
@@ -40,7 +40,6 @@ export function PhotoLibrary({ folderId }: { folderId: string }) {
   const [batchRemove, setBatchRemove] = useState<string[]>([]);
 
   const destinationOptions = (allFolders ?? []).filter((f) => f.folderId !== folderId);
-  const tagSuggestions = (allTags ?? []).map((t) => t.label);
 
   const filtered = useMemo(() => {
     if (!photos) return [];

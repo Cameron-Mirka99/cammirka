@@ -36,6 +36,8 @@ export type TagRecord = {
   updatedAt?: string;
   showOnHome: boolean;
   sortOrder: number;
+  /** Photos currently carrying this tag, sitewide. */
+  count?: number;
 };
 
 export type FolderSummary = {

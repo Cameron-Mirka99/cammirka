@@ -51,6 +51,7 @@ import { movePhoto } from "./functions/movePhoto/resource.js";
 import { presignBulkUpload } from "./functions/presignBulkUpload/resource.js";
 import { processBulkUpload } from "./functions/processBulkUpload/resource.js";
 import { publicPhotos } from "./functions/publicPhotos/resource.js";
+import { recomputeTagCounts } from "./functions/recomputeTagCounts/resource.js";
 import { removeFolderUser } from "./functions/removeFolderUser/resource.js";
 import { retentionSweep } from "./functions/retentionSweep/resource.js";
 import { toggleLike } from "./functions/toggleLike/resource.js";
@@ -95,6 +96,7 @@ const backend = defineBackend({
   presignBulkUpload,
   processBulkUpload,
   publicPhotos,
+  recomputeTagCounts,
   removeFolderUser,
   retentionSweep,
   toggleLike,
@@ -131,6 +133,7 @@ const allFunctions = [
   backend.movePhoto,
   backend.presignBulkUpload,
   backend.publicPhotos,
+  backend.recomputeTagCounts,
   backend.removeFolderUser,
   backend.toggleLike,
   backend.triggerRetentionSweep,
@@ -301,6 +304,11 @@ backend.duplicatePhoto.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadata
 backend.duplicatePhoto.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
 backend.duplicatePhoto.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
 backend.listTags.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.deleteFolder.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.deletePhoto.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.retentionSweep.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.recomputeTagCounts.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
+backend.recomputeTagCounts.addEnvironment("TAG_ASSIGNMENTS_TABLE_NAME", tagAssignmentsTable.tableName);
 backend.updatePhotoTags.addEnvironment("BUCKET_NAME", photoBucket.bucketName);
 backend.updatePhotoTags.addEnvironment("PHOTO_METADATA_TABLE_NAME", photoMetadataTable.tableName);
 backend.updatePhotoTags.addEnvironment("TAG_CATALOG_TABLE_NAME", tagCatalogTable.tableName);
@@ -525,6 +533,11 @@ tagCatalogTable.grantReadWriteData(backend.duplicatePhoto.resources.lambda);
 tagCatalogTable.grantReadData(backend.listTags.resources.lambda);
 tagCatalogTable.grantReadWriteData(backend.updatePhotoTags.resources.lambda);
 tagCatalogTable.grantReadWriteData(backend.updateTagCatalog.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.deleteFolder.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.deletePhoto.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.retentionSweep.resources.lambda);
+tagCatalogTable.grantReadWriteData(backend.recomputeTagCounts.resources.lambda);
+tagAssignmentsTable.grantReadData(backend.recomputeTagCounts.resources.lambda);
 tagAssignmentsTable.grantReadWriteData(backend.uploadImageFunction.resources.lambda);
 tagAssignmentsTable.grantReadData(backend.getPhotoList.resources.lambda);
 tagAssignmentsTable.grantReadData(backend.publicPhotos.resources.lambda);
@@ -786,6 +799,15 @@ const backfillPhotoDimensionsIntegration = new LambdaIntegration(
 );
 const backfillPhotoDimensionsResource = restApi.root.addResource("backfill-photo-dimensions");
 backfillPhotoDimensionsResource.addMethod("POST", backfillPhotoDimensionsIntegration, {
+  authorizationType: AuthorizationType.COGNITO,
+  authorizer,
+});
+
+const recomputeTagCountsIntegration = new LambdaIntegration(
+  backend.recomputeTagCounts.resources.lambda,
+);
+const recomputeTagCountsResource = restApi.root.addResource("recompute-tag-counts");
+recomputeTagCountsResource.addMethod("POST", recomputeTagCountsIntegration, {
   authorizationType: AuthorizationType.COGNITO,
   authorizer,
 });

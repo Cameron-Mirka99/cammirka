@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAdminFolders } from "@/lib/query/useAdminFolders";
-import { usePublicTags } from "@/lib/query/useTags";
+import { usePopularTagLabels } from "@/lib/query/useTags";
 import { uploadImage } from "@/lib/api/photos";
 import {
   buildUploadPayload,
@@ -19,7 +19,7 @@ type FileResult = { name: string; ok: boolean; message?: string };
 
 export default function UploadPage() {
   const { data: folders } = useAdminFolders();
-  const { data: allTags } = usePublicTags();
+  const { labels: tagSuggestions } = usePopularTagLabels();
   const queryClient = useQueryClient();
 
   const [folderId, setFolderId] = useState("");
@@ -30,8 +30,6 @@ export default function UploadPage() {
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [results, setResults] = useState<FileResult[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  const tagSuggestions = (allTags ?? []).map((t) => t.label);
 
   const startUpload = async () => {
     setError(null);

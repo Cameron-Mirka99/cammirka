@@ -7,6 +7,7 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -34,6 +35,8 @@ export type TagRecord = {
   updatedAt: string;
   showOnHome: boolean;
   sortOrder: number;
+  /** Photos currently carrying this tag, sitewide. Only populated when a tag-assignments table is passed to listKnownTags. */
+  count?: number;
 };
 
 export function normalizeTagLabel(value: string) {
@@ -160,6 +163,7 @@ export async function listKnownTags(
         updatedAt: item.updatedAt ?? "",
         showOnHome: typeof item.showOnHome === "boolean" ? item.showOnHome : true,
         sortOrder: normalizeSortOrder(item.sortOrder),
+        count: typeof item.count === "number" ? item.count : 0,
       });
     }
 
@@ -280,9 +284,26 @@ export async function syncPhotoTags(params: {
             typeof existingTag?.sortOrder === "number"
               ? normalizeSortOrder(existingTag.sortOrder)
               : normalizeSortOrder(nextSortOrder++, 0),
+          count: typeof existingTag?.count === "number" ? existingTag.count : 0,
         } satisfies TagRecord,
       }),
     );
+
+    // This photo didn't already carry this tag -- bump the sitewide usage
+    // counter. A separate atomic ADD (not folded into the Put above) so it
+    // can't be lost to a concurrent save landing between the read and the
+    // write of this same tag's catalog row.
+    if (!previousTagKeys.has(tag.tagKey)) {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: tagCatalogTableName,
+          Key: { tagKey: tag.tagKey },
+          UpdateExpression: "ADD #count :one",
+          ExpressionAttributeNames: { "#count": "count" },
+          ExpressionAttributeValues: { ":one": 1 },
+        }),
+      );
+    }
   }
 
   for (const tag of normalizedTags) {
@@ -309,6 +330,15 @@ export async function syncPhotoTags(params: {
           tagKey: previousTagKey,
           photoKey,
         },
+      }),
+    );
+    await ddb.send(
+      new UpdateCommand({
+        TableName: tagCatalogTableName,
+        Key: { tagKey: previousTagKey },
+        UpdateExpression: "ADD #count :minusOne",
+        ExpressionAttributeNames: { "#count": "count" },
+        ExpressionAttributeValues: { ":minusOne": -1 },
       }),
     );
   }
@@ -426,6 +456,7 @@ export async function movePhotoTags(params: {
   const copiedTags = await copyPhotoTags(params);
   await deletePhotoTags({
     photoMetadataTableName: params.photoMetadataTableName,
+    tagCatalogTableName: params.tagCatalogTableName,
     tagAssignmentsTableName: params.tagAssignmentsTableName,
     photoKey: params.sourcePhotoKey,
   });
@@ -434,10 +465,11 @@ export async function movePhotoTags(params: {
 
 export async function deletePhotoTags(params: {
   photoMetadataTableName?: string;
+  tagCatalogTableName?: string;
   tagAssignmentsTableName?: string;
   photoKey: string;
 }) {
-  const { photoMetadataTableName, tagAssignmentsTableName, photoKey } = params;
+  const { photoMetadataTableName, tagCatalogTableName, tagAssignmentsTableName, photoKey } = params;
   if (!photoMetadataTableName || !tagAssignmentsTableName || !photoKey) {
     return;
   }
@@ -472,6 +504,17 @@ export async function deletePhotoTags(params: {
         Key: { tagKey, photoKey },
       }),
     );
+    if (tagCatalogTableName) {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: tagCatalogTableName,
+          Key: { tagKey },
+          UpdateExpression: "ADD #count :minusOne",
+          ExpressionAttributeNames: { "#count": "count" },
+          ExpressionAttributeValues: { ":minusOne": -1 },
+        }),
+      );
+    }
   }
 }
 

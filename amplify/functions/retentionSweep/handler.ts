@@ -13,6 +13,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const FOLDERS_TABLE_NAME = process.env.FOLDERS_TABLE_NAME;
 const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
 const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const MAX_SCAN = Number.parseInt(process.env.MAX_SCAN ?? "20000", 10);
 
@@ -78,6 +79,7 @@ export const handler = async (): Promise<void> => {
           await deletePhotoObjects(photo);
           await deletePhotoTags({
             photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+            tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
             tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
             photoKey: photo.canonicalKey,
           });

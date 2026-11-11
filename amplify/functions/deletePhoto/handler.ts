@@ -7,6 +7,7 @@ import { deletePhotoTags } from "../shared/tagMetadata.js";
 
 const BUCKET_NAME = process.env.BUCKET_NAME;
 const PHOTO_METADATA_TABLE_NAME = process.env.PHOTO_METADATA_TABLE_NAME;
+const TAG_CATALOG_TABLE_NAME = process.env.TAG_CATALOG_TABLE_NAME;
 const TAG_ASSIGNMENTS_TABLE_NAME = process.env.TAG_ASSIGNMENTS_TABLE_NAME;
 const s3 = new S3Client({ region: process.env.AWS_REGION });
 
@@ -43,6 +44,7 @@ export const handler = async (
       await deleteObject(photo.legacyKey);
       await deletePhotoTags({
         photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+        tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
         tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
         photoKey: photo.canonicalKey,
       });
@@ -55,6 +57,7 @@ export const handler = async (
     ]);
     await deletePhotoTags({
       photoMetadataTableName: PHOTO_METADATA_TABLE_NAME,
+      tagCatalogTableName: TAG_CATALOG_TABLE_NAME,
       tagAssignmentsTableName: TAG_ASSIGNMENTS_TABLE_NAME,
       photoKey: photo.canonicalKey,
     });
