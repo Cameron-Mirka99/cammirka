@@ -42,7 +42,12 @@ export default function UsersPage() {
         {filtered.map((u) => (
           <li key={u.username} className="flex items-center justify-between py-3 text-sm">
             <div>
-              <p>{u.name ?? u.email ?? u.username}</p>
+              <p>
+                {[u.givenName, u.familyName].filter(Boolean).join(" ") ||
+                  u.name ||
+                  u.email ||
+                  u.username}
+              </p>
               <p className="text-xs text-muted">
                 {u.email} · {u.folderId ?? "no folder"}
               </p>

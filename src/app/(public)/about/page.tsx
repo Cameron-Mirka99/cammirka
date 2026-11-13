@@ -166,7 +166,7 @@ export default function AboutPage() {
             <a href="/archive" className="underline-offset-4 hover:underline">
               View the Archive
             </a>
-            <a href="/login" className="underline-offset-4 hover:underline">
+            <a href="/login?redirect=%2Fabout" className="underline-offset-4 hover:underline">
               Private gallery access
             </a>
           </div>

@@ -7,6 +7,15 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useThemeMode } from "@/lib/theme/ThemeProvider";
 
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 stroke-current" strokeWidth={1.75}>
+      <circle cx="12" cy="8" r="3.25" />
+      <path d="M4.75 19.25c0-3.45 3.26-6 7.25-6s7.25 2.55 7.25 6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -63,25 +72,12 @@ export function Header() {
             </Link>
           ))}
 
-          {status === "signedIn" ? (
-            <>
-              <Link href="/my-photos" className="opacity-80 transition-opacity hover:opacity-100">
-                My Photos
-              </Link>
-              <Link href="/account" className="opacity-80 transition-opacity hover:opacity-100">
-                Account
-              </Link>
-              {isAdmin && (
-                <Link href="/admin" className="opacity-80 transition-opacity hover:opacity-100">
-                  Admin
-                </Link>
-              )}
-            </>
-          ) : (
-            <Link href="/login" className="opacity-80 transition-opacity hover:opacity-100">
-              Private Access
-            </Link>
-          )}
+          <Link
+            href={status === "signedIn" ? "/my-photos" : "/login?redirect=%2Fmy-photos"}
+            className="opacity-80 transition-opacity hover:opacity-100"
+          >
+            My Photos
+          </Link>
 
           <button
             onClick={toggle}
@@ -91,13 +87,50 @@ export function Header() {
             {mode === "dark" ? "Light" : "Dark"}
           </button>
 
-          {status === "signedIn" && (
-            <button
-              onClick={handleSignOut}
-              className="text-xs uppercase tracking-wide opacity-70 transition-opacity hover:opacity-100"
+          {status === "signedIn" ? (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  aria-label="Account menu"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-current/30 opacity-80 transition-opacity hover:opacity-100"
+                >
+                  <UserIcon />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={12}
+                  className="z-[60] min-w-40 rounded-lg border border-border bg-surface p-2 text-sm text-foreground shadow-lg"
+                >
+                  <DropdownMenu.Item asChild>
+                    <Link href="/account" className="block rounded px-3 py-2 outline-none hover:bg-background">
+                      Account
+                    </Link>
+                  </DropdownMenu.Item>
+                  {isAdmin && (
+                    <DropdownMenu.Item asChild>
+                      <Link href="/admin" className="block rounded px-3 py-2 outline-none hover:bg-background">
+                        Admin
+                      </Link>
+                    </DropdownMenu.Item>
+                  )}
+                  <DropdownMenu.Item
+                    onSelect={handleSignOut}
+                    className="block rounded px-3 py-2 outline-none hover:bg-background"
+                  >
+                    Sign out
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          ) : (
+            <Link
+              href={`/login?redirect=${encodeURIComponent(pathname)}`}
+              className="opacity-80 transition-opacity hover:opacity-100"
             >
-              Sign out
-            </button>
+              Log In
+            </Link>
           )}
         </nav>
 
@@ -127,13 +160,16 @@ export function Header() {
                   </Link>
                 </DropdownMenu.Item>
               ))}
+              <DropdownMenu.Item asChild>
+                <Link
+                  href={status === "signedIn" ? "/my-photos" : "/login?redirect=%2Fmy-photos"}
+                  className="block rounded px-3 py-2 outline-none hover:bg-background"
+                >
+                  My Photos
+                </Link>
+              </DropdownMenu.Item>
               {status === "signedIn" ? (
                 <>
-                  <DropdownMenu.Item asChild>
-                    <Link href="/my-photos" className="block rounded px-3 py-2 outline-none hover:bg-background">
-                      My Photos
-                    </Link>
-                  </DropdownMenu.Item>
                   <DropdownMenu.Item asChild>
                     <Link href="/account" className="block rounded px-3 py-2 outline-none hover:bg-background">
                       Account
@@ -155,8 +191,11 @@ export function Header() {
                 </>
               ) : (
                 <DropdownMenu.Item asChild>
-                  <Link href="/login" className="block rounded px-3 py-2 outline-none hover:bg-background">
-                    Private Access
+                  <Link
+                    href={`/login?redirect=${encodeURIComponent(pathname)}`}
+                    className="block rounded px-3 py-2 outline-none hover:bg-background"
+                  >
+                    Log In
                   </Link>
                 </DropdownMenu.Item>
               )}

@@ -31,6 +31,11 @@ function useBackgroundPhoto() {
   });
 }
 
+function getRedirectTarget(searchParams: URLSearchParams) {
+  const redirect = searchParams.get("redirect");
+  return redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
+}
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,9 +69,9 @@ function LoginContent() {
         return;
       }
       if (result.status === "redeemed") refresh();
-      router.replace("/my-photos");
+      router.replace(getRedirectTarget(searchParams));
     });
-  }, [status, router, refresh]);
+  }, [status, router, refresh, searchParams]);
 
   if (!photoApiBaseUrl) {
     return (
@@ -129,13 +134,13 @@ function LoginContent() {
           }`}
         />
       )}
-      <div className="absolute inset-0 bg-black/75" />
+      <div className="absolute inset-0 bg-black/50" />
 
-      <div className="relative z-10 w-full max-w-sm">
-        <h1 className="font-serif text-2xl italic text-white">
+      <div className="relative z-10 w-full max-w-sm rounded-xl border border-border bg-surface p-8 shadow-xl">
+        <h1 className="font-serif text-2xl italic text-foreground">
           Private client access
         </h1>
-        <p className="mt-2 text-sm text-white/60">
+        <p className="mt-2 text-sm text-muted">
           {step === "signIn" && "Sign in to view your private gallery."}
           {step === "signUp" && "Create an account to continue."}
           {step === "confirm" && "Enter the code we emailed you."}
@@ -171,13 +176,13 @@ function LoginContent() {
             <Field label="Confirmation code" value={code} onChange={setCode} />
           )}
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          {notice && <p className="text-sm text-white/70">{notice}</p>}
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          {notice && <p className="text-sm text-muted">{notice}</p>}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-full bg-white py-2.5 text-sm font-medium text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-full bg-accent py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {submitting
               ? "Please wait…"
@@ -196,7 +201,7 @@ function LoginContent() {
               setError(null);
               setNotice(null);
             }}
-            className="mt-6 w-full text-center text-xs uppercase tracking-wide text-white/60 hover:text-white"
+            className="mt-6 w-full text-center text-xs uppercase tracking-wide text-muted hover:text-foreground"
           >
             {step === "signIn" ? "Need an account? Sign up" : "Have an account? Sign in"}
           </button>
@@ -221,7 +226,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs uppercase tracking-wide text-white/50">
+      <span className="mb-1.5 block text-xs uppercase tracking-wide text-muted">
         {label}
       </span>
       <input
@@ -230,7 +235,7 @@ function Field({
         autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
         required
-        className="w-full rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-white/50"
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
       />
     </label>
   );

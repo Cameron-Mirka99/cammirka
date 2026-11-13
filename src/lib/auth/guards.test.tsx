@@ -6,6 +6,7 @@ import { RequireAdmin } from "./RequireAdmin";
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => "/some-path",
 }));
 
 const useAuthMock = vi.fn();
@@ -34,7 +35,7 @@ describe("RequireAuth", () => {
         <div>secret</div>
       </RequireAuth>
     );
-    expect(replace).toHaveBeenCalledWith("/login");
+    expect(replace).toHaveBeenCalledWith("/login?redirect=%2Fsome-path");
     expect(screen.queryByText("secret")).not.toBeInTheDocument();
   });
 
@@ -74,7 +75,7 @@ describe("RequireAdmin", () => {
         <div>admin-only</div>
       </RequireAdmin>
     );
-    expect(replace).toHaveBeenCalledWith("/login");
+    expect(replace).toHaveBeenCalledWith("/login?redirect=%2Fsome-path");
   });
 
   it("renders children for an admin", () => {
