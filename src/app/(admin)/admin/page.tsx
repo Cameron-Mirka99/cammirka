@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAdminFolders, useCreateFolder } from "@/lib/query/useAdminFolders";
 
@@ -12,6 +12,16 @@ export default function AdminFoldersPage() {
   const [likeLimit, setLikeLimit] = useState("");
   const [bulkRetentionDays, setBulkRetentionDays] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const filteredFolders = useMemo(() => {
+    if (!folders) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return folders;
+    return folders.filter((f) =>
+      [f.displayName, f.folderId].filter(Boolean).join(" ").toLowerCase().includes(q)
+    );
+  }, [folders, query]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,20 +123,31 @@ export default function AdminFoldersPage() {
         <h2 className="text-sm font-medium uppercase tracking-wide text-muted">
           All folders
         </h2>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name…"
+          className="mt-4 w-full max-w-sm rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+        />
         {isLoading && <p className="mt-4 text-sm text-muted">Loading…</p>}
-        <ul className="mt-4 divide-y divide-border border-y border-border">
-          {folders?.map((f) => (
+        <ul className="mt-4 space-y-2">
+          {filteredFolders.map((f) => (
             <li key={f.folderId}>
               <Link
                 href={`/admin/folders/${encodeURIComponent(f.folderId)}`}
-                className="flex items-center justify-between py-3 text-sm transition-colors hover:text-accent"
+                className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-4 py-3 text-sm transition-colors hover:border-accent/60"
               >
-                <span>{f.displayName ?? f.folderId}</span>
-                <span className="text-xs text-muted">{f.folderId}</span>
+                <span className="truncate font-medium text-foreground">
+                  {f.displayName ?? f.folderId}
+                </span>
+                <span className="shrink-0 text-xs text-muted">{f.folderId}</span>
               </Link>
             </li>
           ))}
         </ul>
+        {filteredFolders.length === 0 && !isLoading && (
+          <p className="mt-4 text-sm text-muted">No matching folders.</p>
+        )}
       </section>
     </div>
   );

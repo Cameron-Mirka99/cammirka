@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAdminFolders, useDeleteFolder } from "@/lib/query/useAdminFolders";
 import { InvitePanel } from "./InvitePanel";
@@ -31,11 +32,20 @@ export default function FolderDetailPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-serif text-2xl italic">
-            {folder?.displayName ?? folderId}
-          </h1>
-          <p className="mt-1 text-sm text-muted">{folderId}</p>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/admin"
+            aria-label="Back to folders"
+            className="rounded-full border border-border p-2 text-muted transition-colors hover:bg-surface"
+          >
+            ←
+          </Link>
+          <div>
+            <h1 className="font-serif text-2xl italic">
+              {folder?.displayName ?? folderId}
+            </h1>
+            <p className="mt-1 text-sm text-muted">{folderId}</p>
+          </div>
         </div>
         <div>
           {confirmingDelete ? (

@@ -303,18 +303,28 @@ function PhotoRow({
   return (
     <li className="flex flex-wrap items-center gap-3 py-3">
       <input type="checkbox" checked={selected} onChange={onToggle} className="shrink-0" />
-      <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded bg-surface">
-        {!thumbLoaded && <Skeleton className="absolute inset-0" />}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={photo.thumbnailUrl ?? photo.url}
-          alt={getPhotoTitle(photo)}
-          loading="lazy"
-          onLoad={() => setThumbLoaded(true)}
-          className={`h-full w-full object-cover transition-opacity duration-300 ${
-            thumbLoaded ? "opacity-100" : "opacity-0"
-          }`}
-        />
+      <div className="group relative z-0 h-12 w-16 shrink-0 hover:z-20">
+        <div className="relative h-full w-full overflow-hidden rounded bg-surface">
+          {!thumbLoaded && <Skeleton className="absolute inset-0" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo.thumbnailUrl ?? photo.url}
+            alt={getPhotoTitle(photo)}
+            loading="lazy"
+            onLoad={() => setThumbLoaded(true)}
+            className={`h-full w-full object-cover transition-opacity duration-300 ${
+              thumbLoaded ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        </div>
+        <div className="pointer-events-none absolute left-0 top-full z-20 hidden pt-2 group-hover:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo.thumbnailUrl ?? photo.url}
+            alt=""
+            className="max-h-80 w-auto max-w-sm rounded-lg border border-border object-contain shadow-xl"
+          />
+        </div>
       </div>
       <span className="w-40 shrink-0 truncate text-sm">{getPhotoTitle(photo)}</span>
       {photo.category === "bulk" && (

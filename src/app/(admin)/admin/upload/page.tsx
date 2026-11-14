@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAdminFolders } from "@/lib/query/useAdminFolders";
 import { usePopularTagLabels } from "@/lib/query/useTags";
@@ -22,6 +22,7 @@ export default function UploadPage() {
   const { labels: tagSuggestions } = usePopularTagLabels();
   const queryClient = useQueryClient();
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [folderId, setFolderId] = useState("");
   const [category, setCategory] = useState<PhotoCategory>("final");
   const [files, setFiles] = useState<File[]>([]);
@@ -77,6 +78,7 @@ export default function UploadPage() {
     setProgress(null);
     setUploading(false);
     setFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     queryClient.invalidateQueries({ queryKey: queryKeys.adminFolderPhotos(folderId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.tagsPublic });
   };
@@ -120,16 +122,29 @@ export default function UploadPage() {
         </select>
       </label>
 
-      <label className="block">
+      <div>
         <span className="mb-1 block text-xs text-muted">Files</span>
         <input
+          ref={fileInputRef}
           type="file"
           multiple
           accept="image/*"
           onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-          className="block w-full text-sm"
+          className="hidden"
         />
-      </label>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-muted/10"
+        >
+          Choose files…
+        </button>
+        {files.length > 0 && (
+          <p className="mt-1 text-xs text-muted">
+            {files.length} file{files.length === 1 ? "" : "s"} selected
+          </p>
+        )}
+      </div>
 
       <div>
         <span className="mb-1 block text-xs text-muted">Tags (applied to all files)</span>

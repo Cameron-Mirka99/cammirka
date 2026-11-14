@@ -38,23 +38,26 @@ export default function UsersPage() {
 
       {isLoading && <p className="text-sm text-muted">Loading…</p>}
 
-      <ul className="divide-y divide-border border-y border-border">
+      <ul className="mt-4 space-y-2">
         {filtered.map((u) => (
-          <li key={u.username} className="flex items-center justify-between py-3 text-sm">
-            <div>
-              <p>
+          <li
+            key={u.username}
+            className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-4 py-3 text-sm transition-colors hover:border-accent/60"
+          >
+            <div className="min-w-0">
+              <p className="truncate font-medium text-foreground">
                 {[u.givenName, u.familyName].filter(Boolean).join(" ") ||
                   u.name ||
                   u.email ||
                   u.username}
               </p>
-              <p className="text-xs text-muted">
+              <p className="mt-0.5 truncate text-xs text-muted">
                 {u.email} · {u.folderId ?? "no folder"}
               </p>
             </div>
             <button
               onClick={() => setEditing(u)}
-              className="rounded-full border border-accent px-3 py-1 text-xs uppercase tracking-wide text-accent transition-colors hover:bg-accent hover:text-white"
+              className="shrink-0 rounded-full border border-accent px-3 py-1 text-xs uppercase tracking-wide text-accent transition-colors hover:bg-accent hover:text-white"
             >
               Edit name
             </button>
